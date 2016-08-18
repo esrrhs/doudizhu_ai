@@ -1,15 +1,16 @@
 package ai;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
 
 public class Robot
 {
 	public int no;
-	public ArrayList<Integer> oldcard = new ArrayList<Integer>();
 	public ArrayList<Integer> card = new ArrayList<Integer>();
-	public ArrayList<Step> steps = new ArrayList<Step>();
 	public Table t;
+	public Robot next;
 
 	public Robot(Table t, int no)
 	{
@@ -19,26 +20,17 @@ public class Robot
 
 	public void Clear()
 	{
-		oldcard.clear();
 		card.clear();
-		steps.clear();
-	}
-
-	public void ClearStep()
-	{
-		card.clear();
-		card = (ArrayList<Integer>) oldcard.clone();
-		steps.clear();
 	}
 
 	public void AddCard(int i)
 	{
-		oldcard.add(i);
+		card.add(i);
 	}
 
 	public void SortCard()
 	{
-		Collections.sort(oldcard);
+		Collections.sort(card);
 	}
 
 	public String CardState()
@@ -53,51 +45,68 @@ public class Robot
 
 	public CardInfo Go(CardInfo lastbig)
 	{
-		if (lastbig.r == this)
+		CardInfo ret = null;
+		CardInfo out = null;
+
+		System.out.print("[" + no + "] :(" + CardState() + ")");
+
+		if (no == 4)
 		{
-			// 记录牌面
-			Step s = new Step();
-			s.cardstate = t.GetCardState();
+			System.out.println("type|max|cardstr|cardnum");
+			String str;
+			try
+			{
+				BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+				str = br.readLine();
+				String[] tmp = str.split("\\|");
 
-			CardInfo out = FirstOutCard();
+				CardType type = CardType.values()[Integer.parseInt(tmp[0])];
+				int max = Integer.parseInt(tmp[1]);
+				Robot r = this;
+				String cardstr = tmp[2];
+				int cardnum = Integer.parseInt(tmp[3]);
 
-			s.outcard = out;
-			steps.add(s);
+				out = new CardInfo(type, max, r, cardstr, cardnum);
+			}
+			catch (Exception e)
+			{
 
-			//System.out.println("[" + no + "] first : (" + CardState() + ") " + out.cardstr);
-
-			RemoveCard(out);
-
-			return out;
+			}
 		}
 		else
 		{
-			CardInfo ret;
-
 			// 记录牌面
-			Step s = new Step();
-			s.cardstate = t.GetCardState() + "|" + lastbig.cardstr;
-
-			CardInfo out = OutCard(lastbig);
-
-			s.outcard = out;
-			steps.add(s);
-
-			if (out.type == CardType.ct_pass)
-			{
-				ret = lastbig;
-			}
-			else
-			{
-				ret = out;
-			}
-
-			//System.out.println("[" + no + "] :(" + CardState() + ")" + (out.cardstr.isEmpty() ? "pass" : out.cardstr));
-
-			RemoveCard(out);
-
-			return ret;
+			out = OutCard(lastbig);
 		}
+
+		if (out.type == CardType.ct_pass)
+		{
+			ret = lastbig;
+		}
+		else
+		{
+			ret = out;
+		}
+
+		System.out.println((out.cardstr.isEmpty() ? "pass" : out.cardstr));
+
+		RemoveCard(out);
+
+		return ret;
+	}
+
+	public void AddCard(CardInfo out)
+	{
+		if (!out.cardstr.isEmpty())
+		{
+			String[] strcards = out.cardstr.split(",");
+			for (String s : strcards)
+			{
+				Integer card = Integer.valueOf(s);
+				this.card.add(card);
+			}
+		}
+		Collections.sort(card);
 	}
 
 	public void RemoveCard(CardInfo out)
@@ -118,41 +127,11 @@ public class Robot
 		return t.l.OutCard(this, lastbig);
 	}
 
-	public CardInfo FirstOutCard()
-	{
-		return t.l.FirstOutCard(this);
-	}
-
 	public void Win()
 	{
 		// 存储此次的牌面和出牌
 		System.out.println("[" + no + "] :Win");
 
-		for (Step s : steps)
-		{
-			String key = "" + no + "_" + s.cardstate;
-			String field = s.outcard.cardstr;
-			String value = t.client.hget(key, field);
-			if (value == null || value.isEmpty())
-			{
-				value = "1";
-			}
-			else
-			{
-				String[] values = value.split("\\$");
-				int num = Integer.valueOf(values[0]) + 1;
-
-				value = "" + num;
-
-				System.out.println("------" + num);
-			}
-
-			String realvalue = value + "$" + s.outcard.type.ordinal() + "$" + s.outcard.max + "$" + s.outcard.cardnum;
-
-			t.client.hset(key, field, realvalue);
-
-			//System.out.println("[ " + key + " ] : " + field + " " + value);
-		}
 	}
 
 	public boolean IsEnd()

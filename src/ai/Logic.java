@@ -1,6 +1,7 @@
 package ai;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Random;
@@ -38,40 +39,32 @@ public class Logic
 		// 发牌
 		Dispatch();
 
-		// 一样的牌，打N次
-		for (int i = 0; i < N; i++)
+		CardInfo lastbig = new CardInfo(CardType.ct_single, -1, A, "", 1);
+
+		// 开始打
+		while (true)
 		{
-			A.ClearStep();
-			B.ClearStep();
-			C.ClearStep();
-
-			CardInfo lastbig = new CardInfo(CardType.ct_single, -1, A, "", 1);
-
-			// 开始打
-			while (true)
+			lastbig = A.Go(lastbig);
+			if (IsEnd())
 			{
-				lastbig = A.Go(lastbig);
-				if (IsEnd())
-				{
-					A.Win();
-					break;
-				}
+				A.Win();
+				break;
+			}
 
-				lastbig = B.Go(lastbig);
-				if (IsEnd())
-				{
-					B.Win();
-					C.Win();
-					break;
-				}
+			lastbig = B.Go(lastbig);
+			if (IsEnd())
+			{
+				B.Win();
+				C.Win();
+				break;
+			}
 
-				lastbig = C.Go(lastbig);
-				if (IsEnd())
-				{
-					B.Win();
-					C.Win();
-					break;
-				}
+			lastbig = C.Go(lastbig);
+			if (IsEnd())
+			{
+				B.Win();
+				C.Win();
+				break;
 			}
 		}
 	}
@@ -117,36 +110,198 @@ public class Logic
 
 	public CardInfo OutCard(Robot r, CardInfo lastbig)
 	{
-		ArrayList<CardInfo> outlist = FindBigger(r, lastbig);
-		int index = rand.nextInt(outlist.size());
-		return outlist.get(index);
+		CardInfo ret = new CardInfo();
+		MinMaxCard(7, r, lastbig, ret);
+		return ret;
+	}
+
+	public int MinMaxCard(int deps, Robot r, CardInfo lastbig, CardInfo ret)
+	{
+		if (IsEnd())
+		{
+			if (A.IsEnd())
+			{
+				return 9999999;
+			}
+			else
+			{
+				return -9999999;
+			}
+		}
+
+		if (deps == 0)
+		{
+			return Eveluation();
+		}
+
+		int retvalue;
+		if (r.no == 0)
+		{
+			retvalue = Integer.MIN_VALUE;
+		}
+		else
+		{
+			retvalue = Integer.MAX_VALUE;
+		}
+
+		ArrayList<CardInfo> outlist;
+		if (lastbig.r == r)
+		{
+			outlist = FindFirstOutCard(r);
+		}
+		else
+		{
+			outlist = FindBigger(r, lastbig);
+		}
+
+		for (CardInfo c : outlist)
+		{
+			int oldsize = r.card.size();
+			r.RemoveCard(c);
+
+			CardInfo newlastbig;
+			if (c.type == CardType.ct_pass)
+			{
+				newlastbig = (CardInfo) lastbig.clone();
+			}
+			else
+			{
+				newlastbig = (CardInfo) c.clone();
+			}
+
+			Robot next = r.next;
+
+			int value = MinMaxCard(deps - 1, next, newlastbig, null);
+
+			r.AddCard(c);
+
+			if (r.card.size() != oldsize)
+			{
+				System.out.println("aaa");
+			}
+
+			//System.out.println("deps " + deps + " robot[" + r.no + "] try card " + c.cardstr + " value " + value);
+
+			if (r.no == 0)
+			{
+				if (value > retvalue)
+				{
+					retvalue = value;
+					if (ret != null)
+					{
+						ret.copyfrom(c);
+					}
+				}
+			}
+			else
+			{
+				if (value < retvalue)
+				{
+					retvalue = value;
+					if (ret != null)
+					{
+						ret.copyfrom(c);
+					}
+				}
+			}
+		}
+
+		if (ret != null && ret.cardstr == null)
+		{
+			ret.copyfrom(new CardInfo(CardType.ct_pass, -1, r, "", 0));
+		}
+
+		return retvalue;
+	}
+
+	public int Eveluation()
+	{
+		int a = EveluationCard(A);
+		int b = EveluationCard(B);
+		int c = EveluationCard(C);
+		return a - (b + c) + 100 * (Math.min(B.card.size(), C.card.size() - A.card.size()));
+	}
+
+	public int EveluationCard(Robot r)
+	{
+		HashMap<Integer, Integer> tmp = new HashMap<Integer, Integer>();
+		for (Integer c : r.card)
+		{
+			if (tmp.get(c) == null)
+			{
+				tmp.put(c, 1);
+			}
+			else
+			{
+				tmp.put(c, tmp.get(c) + 1);
+			}
+		}
+
+		int ret = 0;
+		for (Map.Entry<Integer, Integer> e : tmp.entrySet())
+		{
+			int card = e.getKey().intValue();
+			int num = e.getValue().intValue();
+			if (num == 1)
+			{
+				ret += card;
+			}
+			if (num == 2)
+			{
+				ret += card * 5;
+			}
+			if (num == 3)
+			{
+				ret += card * 60;
+			}
+			if (num == 4)
+			{
+				ret += card * 1000;
+			}
+		}
+
+		for (int i = 0; i < r.card.size() - 3; i++)
+		{
+			int cur = r.card.get(i);
+			int next = r.card.get(i + 1);
+
+			if (cur == 14 && next == 15)
+			{
+				ret += 15000;
+				break;
+			}
+		}
+
+		int num = 0;
+		for (int i = 0; i < r.card.size() - 1; i++)
+		{
+			int cur = r.card.get(i);
+			int next = r.card.get(i + 1);
+			if (cur + 1 == next)
+			{
+				num++;
+			}
+			else
+			{
+				if (num >= 5)
+				{
+					ret += cur * 10 + num * 2;
+				}
+				num = 0;
+			}
+		}
+		if (num >= 5)
+		{
+			ret += r.card.get(r.card.size() - 1) * 30 + num * 2;
+			num = 0;
+		}
+
+		return ret;
 	}
 
 	public ArrayList<CardInfo> FindBigger(Robot r, CardInfo lastbig)
 	{
 		ArrayList<CardInfo> ret = new ArrayList<CardInfo>();
-
-		// history
-		String cardstate = t.GetCardState();
-		Map<String, String> oldout = t.client.hgetAll(cardstate);
-		for (Map.Entry<String, String> entry : oldout.entrySet())
-		{
-			String key = entry.getKey();
-			String value = entry.getValue();
-
-			String[] values = value.split("\\$");
-
-			int num = Integer.valueOf(values[0]);
-			int typeint = Integer.valueOf(values[1]);
-			int max = Integer.valueOf(values[2]);
-			int cardnum = Integer.valueOf(values[3]);
-
-			for (int j = 0; j < num; j++)
-			{
-				CardInfo n = new CardInfo(CardType.values()[typeint], max, r, key, cardnum);
-				ret.add(n);
-			}
-		}
 
 		ret.add(new CardInfo(CardType.ct_pass, -1, r, "", 0));
 
@@ -162,6 +317,7 @@ public class Logic
 
 		CardInfo tmpboom = (CardInfo) lastbig.clone();
 		tmpboom.max = 0;
+		tmpboom.cardnum = 4;
 
 		if (lastbig.type == CardType.ct_single)
 		{
@@ -258,7 +414,7 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerDoubleThreePlusTwo(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
-		for (int i = 0; i < r.card.size() - lastbig.cardnum - 2; i++)
+		for (int i = 0; i < r.card.size() - (lastbig.cardnum - 2); i++)
 		{
 			if (r.card.get(i).intValue() > lastbig.max)
 			{
@@ -283,31 +439,26 @@ public class Logic
 				{
 					for (int j = 0; j < r.card.size() - 1; j++)
 					{
-						if (r.card.get(j).intValue() == r.card.get(j + 1).intValue())
+						if (r.card.get(j).intValue() == r.card.get(j + 1).intValue()
+								&& (j < i || j > i + lastbig.cardnum - 2)
+								&& (j + 1 < i || j + 1 > i + lastbig.cardnum - 2))
 						{
-							for (int z = 0; z < lastbig.cardnum - 2; z++)
+							String cardstr = "";
+							for (int k = 0; k < lastbig.cardnum - 2; k++)
 							{
-								if (r.card.get(j).intValue() != r.card.get(z).intValue())
+								if (k != 0)
 								{
-									String cardstr = "";
-									for (int k = 0; k < lastbig.cardnum - 1; k++)
-									{
-										if (k != 0)
-										{
-											cardstr += ",";
-										}
-										cardstr += r.card.get(i + k).intValue();
-									}
-									cardstr += "," + r.card.get(j).intValue();
-									cardstr += "," + r.card.get(j + 1).intValue();
-
-									ret.add(new CardInfo(CardType.ct_double_three_plus_two, r.card.get(i).intValue(), r,
-											cardstr, lastbig.cardnum));
+									cardstr += ",";
 								}
+								cardstr += r.card.get(i + k).intValue();
 							}
+							cardstr += "," + r.card.get(j).intValue();
+							cardstr += "," + r.card.get(j + 1).intValue();
+
+							ret.add(new CardInfo(CardType.ct_double_three_plus_two, r.card.get(i).intValue(), r,
+									cardstr, lastbig.cardnum));
 						}
 					}
-
 				}
 			}
 		}
@@ -317,7 +468,7 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerDoubleThreePlusOne(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
-		for (int i = 0; i < r.card.size() - lastbig.cardnum - 1; i++)
+		for (int i = 0; i < r.card.size() - (lastbig.cardnum - 1); i++)
 		{
 			if (r.card.get(i).intValue() > lastbig.max)
 			{
@@ -342,27 +493,23 @@ public class Logic
 				{
 					for (int j = 0; j < r.card.size(); j++)
 					{
-						for (int z = 0; z < lastbig.cardnum - 1; z++)
+						if (j < i || j > i + lastbig.cardnum - 1)
 						{
-							if (r.card.get(j).intValue() != r.card.get(z).intValue())
+							String cardstr = "";
+							for (int k = 0; k < lastbig.cardnum - 1; k++)
 							{
-								String cardstr = "";
-								for (int k = 0; k < lastbig.cardnum - 1; k++)
+								if (k != 0)
 								{
-									if (k != 0)
-									{
-										cardstr += ",";
-									}
-									cardstr += r.card.get(i + k).intValue();
+									cardstr += ",";
 								}
-								cardstr += "," + r.card.get(j).intValue();
-
-								ret.add(new CardInfo(CardType.ct_double_three_plus_one, r.card.get(i).intValue(), r,
-										cardstr, lastbig.cardnum));
+								cardstr += r.card.get(i + k).intValue();
 							}
+							cardstr += "," + r.card.get(j).intValue();
+
+							ret.add(new CardInfo(CardType.ct_double_three_plus_one, r.card.get(i).intValue(), r,
+									cardstr, lastbig.cardnum));
 						}
 					}
-
 				}
 			}
 		}
@@ -703,126 +850,89 @@ public class Logic
 		return false;
 	}
 
-	public CardInfo FirstOutCard(Robot r)
+	public ArrayList<CardInfo> FindFirstOutCard(Robot r)
 	{
-		CardInfo info;
-		while (true)
+		ArrayList<CardInfo> ret = new ArrayList<CardInfo>();
+
+		CardInfo lastbig = new CardInfo(CardType.ct_single, -1, r, "", 0);
+		lastbig.type = CardType.ct_single;
 		{
-			int index = rand.nextInt(CardType.values().length);
-			CardType type = CardType.values()[index];
-			if (type != CardType.ct_pass)
-			{
-				ArrayList<CardInfo> ret = new ArrayList<CardInfo>();
-
-				// history
-				String cardstate = t.GetCardState();
-				Map<String, String> oldout = t.client.hgetAll(cardstate);
-				for (Map.Entry<String, String> entry : oldout.entrySet())
-				{
-					String key = entry.getKey();
-					String value = entry.getValue();
-
-					String[] values = value.split("\\$");
-
-					int num = Integer.valueOf(values[0]);
-					int typeint = Integer.valueOf(values[1]);
-					int max = Integer.valueOf(values[2]);
-					int cardnum = Integer.valueOf(values[3]);
-
-					for (int j = 0; j < num; j++)
-					{
-						CardInfo n = new CardInfo(CardType.values()[typeint], max, r, key, cardnum);
-						ret.add(n);
-					}
-				}
-
-				CardInfo lastbig = new CardInfo(type, -1, r, "", 0);
-				if (type == CardType.ct_single)
-				{
-					lastbig.cardnum = 1;
-					ret = FindBiggerSingle(ret, r, lastbig);
-				}
-
-				if (type == CardType.ct_double)
-				{
-					lastbig.cardnum = 2;
-					ret = FindBiggerDouble(ret, r, lastbig);
-				}
-
-				if (type == CardType.ct_three)
-				{
-					lastbig.cardnum = 3;
-					ret = FindBiggerThree(ret, r, lastbig);
-				}
-
-				if (type == CardType.ct_boom)
-				{
-					lastbig.cardnum = 4;
-					ret = FindBiggerBoom(ret, r, lastbig);
-				}
-
-				if (type == CardType.ct_three_plus_one)
-				{
-					lastbig.cardnum = 4;
-					ret = FindBiggerThreePlusOne(ret, r, lastbig);
-				}
-
-				if (type == CardType.ct_three_plus_two)
-				{
-					lastbig.cardnum = 5;
-					ret = FindBiggerThreePlusTwo(ret, r, lastbig);
-				}
-
-				if (type == CardType.ct_four_plus_two)
-				{
-					lastbig.cardnum = 6;
-					ret = FindBiggerFourPlusTwo(ret, r, lastbig);
-				}
-
-				if (type == CardType.ct_four_plus_two_double)
-				{
-					lastbig.cardnum = 8;
-					ret = FindBiggerFourPlusTwoDouble(ret, r, lastbig);
-				}
-
-				if (type == CardType.ct_continue)
-				{
-					lastbig.cardnum = 5 + rand.nextInt(5);
-					ret = FindBiggerContinue(ret, r, lastbig);
-				}
-
-				if (type == CardType.ct_double_continue)
-				{
-					lastbig.cardnum = 6 + rand.nextInt(2) * 2;
-					ret = FindBiggerDoubleContinue(ret, r, lastbig);
-				}
-
-				if (type == CardType.ct_double_three)
-				{
-					lastbig.cardnum = 6 + rand.nextInt(1) * 3;
-					ret = FindBiggerDoubleThree(ret, r, lastbig);
-				}
-
-				if (type == CardType.ct_double_three_plus_one)
-				{
-					lastbig.cardnum = 6 + rand.nextInt(1) * 3 + 1;
-					ret = FindBiggerDoubleThreePlusOne(ret, r, lastbig);
-				}
-
-				if (type == CardType.ct_double_three_plus_two)
-				{
-					lastbig.cardnum = 6 + rand.nextInt(1) * 3 + 2;
-					ret = FindBiggerDoubleThreePlusTwo(ret, r, lastbig);
-				}
-
-				if (!ret.isEmpty())
-				{
-					int i = rand.nextInt(ret.size());
-					info = ret.get(i);
-					break;
-				}
-			}
+			lastbig.cardnum = 1;
+			ret = FindBiggerSingle(ret, r, lastbig);
 		}
-		return info;
+
+		lastbig.type = CardType.ct_double;
+		{
+			lastbig.cardnum = 2;
+			ret = FindBiggerDouble(ret, r, lastbig);
+		}
+
+		lastbig.type = CardType.ct_three;
+		{
+			lastbig.cardnum = 3;
+			ret = FindBiggerThree(ret, r, lastbig);
+		}
+
+		lastbig.type = CardType.ct_boom;
+		{
+			lastbig.cardnum = 4;
+			ret = FindBiggerBoom(ret, r, lastbig);
+		}
+
+		lastbig.type = CardType.ct_three_plus_one;
+		{
+			lastbig.cardnum = 4;
+			ret = FindBiggerThreePlusOne(ret, r, lastbig);
+		}
+
+		lastbig.type = CardType.ct_three_plus_two;
+		{
+			lastbig.cardnum = 5;
+			ret = FindBiggerThreePlusTwo(ret, r, lastbig);
+		}
+
+		lastbig.type = CardType.ct_four_plus_two;
+		{
+			lastbig.cardnum = 6;
+			ret = FindBiggerFourPlusTwo(ret, r, lastbig);
+		}
+
+		lastbig.type = CardType.ct_four_plus_two_double;
+		{
+			lastbig.cardnum = 8;
+			ret = FindBiggerFourPlusTwoDouble(ret, r, lastbig);
+		}
+
+		lastbig.type = CardType.ct_continue;
+		{
+			lastbig.cardnum = 5 + rand.nextInt(5);
+			ret = FindBiggerContinue(ret, r, lastbig);
+		}
+
+		lastbig.type = CardType.ct_double_continue;
+		{
+			lastbig.cardnum = 6 + rand.nextInt(2) * 2;
+			ret = FindBiggerDoubleContinue(ret, r, lastbig);
+		}
+
+		lastbig.type = CardType.ct_double_three;
+		{
+			lastbig.cardnum = 6 + rand.nextInt(1) * 3;
+			ret = FindBiggerDoubleThree(ret, r, lastbig);
+		}
+
+		lastbig.type = CardType.ct_double_three_plus_one;
+		{
+			lastbig.cardnum = 6 + rand.nextInt(1) * 3 + 1;
+			ret = FindBiggerDoubleThreePlusOne(ret, r, lastbig);
+		}
+
+		lastbig.type = CardType.ct_double_three_plus_two;
+		{
+			lastbig.cardnum = 6 + rand.nextInt(1) * 3 + 2;
+			ret = FindBiggerDoubleThreePlusTwo(ret, r, lastbig);
+		}
+
+		return ret;
 	}
 }

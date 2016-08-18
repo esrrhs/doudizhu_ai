@@ -1,14 +1,11 @@
 package ai;
 
-import redis.clients.jedis.Jedis;
-
 public class Table
 {
 	public Robot A;
 	public Robot B;
 	public Robot C;
 	public Logic l;
-	public Jedis client = new Jedis("127.0.0.1", 6379);
 
 	public void Run()
 	{
@@ -16,8 +13,10 @@ public class Table
 		B = new Robot(this, 1);
 		C = new Robot(this, 2);
 		l = new Logic(this);
+		A.next = B;
+		B.next = C;
+		C.next = A;
 
-		while (true)
 		{
 			A.Clear();
 			B.Clear();
