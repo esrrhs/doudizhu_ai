@@ -76,7 +76,7 @@ public class Logic
 
 	public void Dispatch()
 	{
-		boolean test = true;
+		boolean test = false;
 		if (test)
 		{
 			String a = "2,2,2,3,3,4,5,5,5,6,7,8,8,10,10,10,11,11,12,15";
