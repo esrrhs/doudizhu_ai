@@ -76,65 +76,171 @@ public class Logic
 
 	public void Dispatch()
 	{
-		/*String a = "1,2,3,3,3,5,5,6,6,7,8,8,10,11,11,12,12,13,13,14";
-		String b = "1,1,2,2,3,4,4,5,7,9,9,9,10,10,12,13,15";
-		String c = "1,2,4,4,5,6,6,7,7,8,8,9,10,11,11,12,13";
-		
-		for (String s : a.split("\\,"))
+		boolean test = true;
+		if (test)
 		{
-			A.AddCard(Integer.parseInt(s));
-		}
-		
-		for (String s : b.split("\\,"))
-		{
-			B.AddCard(Integer.parseInt(s));
-		}
-		
-		for (String s : c.split("\\,"))
-		{
-			C.AddCard(Integer.parseInt(s));
-		}*/
+			String a = "2,2,2,3,3,4,5,5,5,6,7,8,8,10,10,10,11,11,12,15";
+			String b = "1,1,1,2,3,3,4,6,6,8,8,9,9,9,12,12,12";
+			String c = "1,4,4,5,6,7,7,7,9,10,11,11,13,13,13,13,14";
 
-		LinkedList<Integer> tmp = new LinkedList<Integer>();
-		for (int i : AllCard)
-		{
-			tmp.add(i);
-		}
+			for (String s : a.split("\\,"))
+			{
+				A.AddCard(Integer.parseInt(s));
+			}
 
-		for (int i = 0; i < 20; i++)
-		{
-			int index = rand.nextInt(tmp.size());
-			int card = tmp.get(index);
-			tmp.remove(index);
-			A.AddCard(card);
-		}
-		A.SortCard();
+			for (String s : b.split("\\,"))
+			{
+				B.AddCard(Integer.parseInt(s));
+			}
 
-		for (int i = 0; i < 17; i++)
-		{
-			int index = rand.nextInt(tmp.size());
-			int card = tmp.get(index);
-			tmp.remove(index);
-			B.AddCard(card);
+			for (String s : c.split("\\,"))
+			{
+				C.AddCard(Integer.parseInt(s));
+			}
 		}
-		B.SortCard();
+		else
+		{
+			LinkedList<Integer> tmp = new LinkedList<Integer>();
+			for (int i : AllCard)
+			{
+				tmp.add(i);
+			}
 
-		for (int i = 0; i < tmp.size(); i++)
-		{
-			int card = tmp.get(i);
-			C.AddCard(card);
+			for (int i = 0; i < 20; i++)
+			{
+				int index = rand.nextInt(tmp.size());
+				int card = tmp.get(index);
+				tmp.remove(index);
+				A.AddCard(card);
+			}
+			A.SortCard();
+
+			for (int i = 0; i < 17; i++)
+			{
+				int index = rand.nextInt(tmp.size());
+				int card = tmp.get(index);
+				tmp.remove(index);
+				B.AddCard(card);
+			}
+			B.SortCard();
+
+			for (int i = 0; i < tmp.size(); i++)
+			{
+				int card = tmp.get(i);
+				C.AddCard(card);
+			}
+			C.SortCard();
 		}
-		C.SortCard();
 	}
 
 	public CardInfo OutCard(Robot r, CardInfo lastbig)
 	{
 		CardInfo ret = new CardInfo();
-		MinMaxCard(7, r, lastbig, ret, Integer.MIN_VALUE, Integer.MAX_VALUE);
+		//MinMaxCard(6, r, lastbig, ret);
+		AlphaBeta(6, r, lastbig, ret, Integer.MIN_VALUE, Integer.MAX_VALUE);
 		return ret;
 	}
 
-	public int MinMaxCard(int deps, Robot r, CardInfo lastbig, CardInfo ret, int alpha, int beta)
+	public int MinMaxCard(int deps, Robot r, CardInfo lastbig, CardInfo ret)
+	{
+		if (IsEnd())
+		{
+			if (A.IsEnd())
+			{
+				return 9999999;
+			}
+			else
+			{
+				return -9999999;
+			}
+		}
+
+		if (deps == 0)
+		{
+			return Eveluation();
+		}
+
+		ArrayList<CardInfo> outlist;
+		if (lastbig.r == r)
+		{
+			outlist = FindFirstOutCard(r);
+		}
+		else
+		{
+			outlist = FindBigger(r, lastbig);
+		}
+
+		int retvalue = 0;
+		if (r.no == 0)
+		{
+			retvalue = Integer.MIN_VALUE;
+		}
+		else
+		{
+			retvalue = Integer.MAX_VALUE;
+		}
+
+		for (CardInfo c : outlist)
+		{
+			int oldsize = r.card.size();
+			r.RemoveCard(c);
+
+			CardInfo newlastbig;
+			if (c.type == CardType.ct_pass)
+			{
+				newlastbig = (CardInfo) lastbig.clone();
+			}
+			else
+			{
+				newlastbig = (CardInfo) c.clone();
+			}
+
+			Robot next = r.next;
+
+			int value = MinMaxCard(deps - 1, next, newlastbig, null);
+
+			r.AddCard(c);
+
+			if (r.card.size() != oldsize)
+			{
+				System.out.println("aaa");
+			}
+
+			//System.out.println("deps " + deps + " robot[" + r.no + "] try card " + c.cardstr + " value " + value);
+
+			if (r.no == 0)
+			{
+				if (value > retvalue)
+				{
+					retvalue = value;
+					if (ret != null)
+					{
+						ret.copyfrom(c);
+					}
+				}
+			}
+			else
+			{
+				if (value < retvalue)
+				{
+					retvalue = value;
+					if (ret != null)
+					{
+						ret.copyfrom(c);
+					}
+				}
+			}
+		}
+
+		if (ret != null && ret.cardstr == null)
+		{
+			ret.copyfrom(new CardInfo(CardType.ct_pass, -1, r, "", 0));
+		}
+
+		return retvalue;
+	}
+
+	public int AlphaBeta(int deps, Robot r, CardInfo lastbig, CardInfo ret, int alpha, int beta)
 	{
 		if (IsEnd())
 		{
@@ -182,7 +288,7 @@ public class Logic
 
 				Robot next = r.next;
 
-				int value = MinMaxCard(deps - 1, next, newlastbig, null, alpha, beta);
+				int value = AlphaBeta(deps - 1, next, newlastbig, null, alpha, beta);
 
 				r.AddCard(c);
 
@@ -200,10 +306,10 @@ public class Logic
 					{
 						ret.copyfrom(c);
 					}
-					if (alpha >= beta)
-					{
-						return beta;
-					}
+				}
+				if (value >= beta)
+				{
+					return beta;
 				}
 			}
 
@@ -233,7 +339,7 @@ public class Logic
 
 				Robot next = r.next;
 
-				int value = MinMaxCard(deps - 1, next, newlastbig, null, alpha, beta);
+				int value = AlphaBeta(deps - 1, next, newlastbig, null, alpha, beta);
 
 				r.AddCard(c);
 
@@ -251,10 +357,10 @@ public class Logic
 					{
 						ret.copyfrom(c);
 					}
-					if (alpha >= beta)
-					{
-						return alpha;
-					}
+				}
+				if (alpha >= value)
+				{
+					return alpha;
 				}
 			}
 
