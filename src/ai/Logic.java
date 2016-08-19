@@ -79,9 +79,9 @@ public class Logic
 		boolean test = true;
 		if (test)
 		{
-			String a = "2,4,6,8";
-			String b = "1,3,5,7,8";
-			String c = "1,2,4,4,5,5,7,7,9,10,12,13,15";
+			String a = "1,1,3,3,4,6,7,7,8,9,9,11,12,13,13,15";
+			String b = "1,2,5,6,7,9,10,10,11,11,11,12,13";
+			String c = "1,2,2,3,3,4,4,5,5,6,8,8,10,12";
 
 			for (String s : a.split("\\,"))
 			{
@@ -413,9 +413,41 @@ public class Logic
 		int a = EveluationCard(A);
 		int b = EveluationCard(B);
 		int c = EveluationCard(C);
-		return a - (b + c) + 50 * (B.card.size() - A.card.size()) + 50 * (C.card.size() - A.card.size());
+		return a - (b + c);
 	}
 
+
+	public int EveluationNum(int num)
+	{
+		return (10 - num) * EveluationOne(1);
+	}
+	
+	public int EveluationOne(int card)
+	{
+		return card * card / 2;
+	}
+
+	public int EveluationTwo(int card)
+	{
+		return card * EveluationOne(3);
+	}
+
+	public int EveluationThree(int card)
+	{
+		return card * EveluationTwo(5);
+	}
+	
+
+	public int EveluationFour(int card)
+	{
+		return card * EveluationThree(14);
+	}
+
+	public int EveluationContinue(int card, int num)
+	{
+		return num * EveluationOne(card);
+	}
+	
 	public int EveluationCard(Robot r)
 	{
 		HashMap<Integer, Integer> tmp = new HashMap<Integer, Integer>();
@@ -438,19 +470,19 @@ public class Logic
 			int num = e.getValue().intValue();
 			if (num == 1)
 			{
-				ret += card;
+				ret += EveluationOne(card);
 			}
 			if (num == 2)
 			{
-				ret += card * 5;
+				ret += EveluationTwo(card);
 			}
 			if (num == 3)
 			{
-				ret += card * 60;
+				ret += EveluationThree(card);
 			}
 			if (num == 4)
 			{
-				ret += card * 1000;
+				ret += EveluationFour(card);
 			}
 		}
 
@@ -461,7 +493,7 @@ public class Logic
 
 			if (cur == 14 && next == 15)
 			{
-				ret += 20000;
+				ret += EveluationFour(15);
 				break;
 			}
 		}
@@ -479,17 +511,19 @@ public class Logic
 			{
 				if (num >= 5)
 				{
-					ret += cur * 30 + num * 2;
+					ret += EveluationContinue(cur, num);
 				}
 				num = 0;
 			}
 		}
 		if (num >= 5)
 		{
-			ret += r.card.get(r.card.size() - 1) * 30 + num * 2;
+			ret += EveluationContinue(r.card.get(r.card.size() - 1), num);
 			num = 0;
 		}
 
+		ret += EveluationNum(r.card.size());
+		
 		return ret;
 	}
 
