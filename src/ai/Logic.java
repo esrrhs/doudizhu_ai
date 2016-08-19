@@ -76,12 +76,12 @@ public class Logic
 
 	public void Dispatch()
 	{
-		boolean test = false;
+		boolean test = true;
 		if (test)
 		{
-			String a = "2,2,2,3,3,4,5,5,5,6,7,8,8,10,10,10,11,11,12,15";
-			String b = "1,1,1,2,3,3,4,6,6,8,8,9,9,9,12,12,12";
-			String c = "1,4,4,5,6,7,7,7,9,10,11,11,13,13,13,13,14";
+			String a = "2,4,6,8";
+			String b = "1,3,5,7,8";
+			String c = "1,2,4,4,5,5,7,7,9,10,12,13,15";
 
 			for (String s : a.split("\\,"))
 			{
@@ -180,8 +180,15 @@ public class Logic
 			retvalue = Integer.MAX_VALUE;
 		}
 
+		CardInfo last = null;
 		for (CardInfo c : outlist)
 		{
+			if (last != null && last.cardstr.equals(c.cardstr))
+			{
+				continue;
+			}
+			last = c;
+
 			int oldsize = r.card.size();
 			r.RemoveCard(c);
 
@@ -271,8 +278,15 @@ public class Logic
 
 		if (r.no == 0)
 		{
+			CardInfo last = null;
 			for (CardInfo c : outlist)
 			{
+				if (last != null && last.cardstr.equals(c.cardstr))
+				{
+					continue;
+				}
+				last = c;
+
 				int oldsize = r.card.size();
 				r.RemoveCard(c);
 
@@ -307,6 +321,13 @@ public class Logic
 						ret.copyfrom(c);
 					}
 				}
+				else if (value == alpha)
+				{
+					if (ret != null && ret.type == CardType.ct_pass)
+					{
+						ret.copyfrom(c);
+					}
+				}
 				if (value >= beta)
 				{
 					return beta;
@@ -322,8 +343,15 @@ public class Logic
 		}
 		else
 		{
+			CardInfo last = null;
 			for (CardInfo c : outlist)
 			{
+				if (last != null && last.cardstr.equals(c.cardstr))
+				{
+					continue;
+				}
+				last = c;
+
 				int oldsize = r.card.size();
 				r.RemoveCard(c);
 
@@ -354,6 +382,13 @@ public class Logic
 				{
 					beta = value;
 					if (ret != null)
+					{
+						ret.copyfrom(c);
+					}
+				}
+				else if (value == beta)
+				{
+					if (ret != null && ret.type == CardType.ct_pass)
 					{
 						ret.copyfrom(c);
 					}
@@ -426,7 +461,7 @@ public class Logic
 
 			if (cur == 14 && next == 15)
 			{
-				ret += 15000;
+				ret += 20000;
 				break;
 			}
 		}
@@ -444,7 +479,7 @@ public class Logic
 			{
 				if (num >= 5)
 				{
-					ret += cur * 10 + num * 2;
+					ret += cur * 30 + num * 2;
 				}
 				num = 0;
 			}
@@ -573,12 +608,13 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerDoubleThreePlusTwo(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
-		for (int i = 0; i < r.card.size() - (lastbig.cardnum - 2); i++)
+		int threenum = lastbig.cardnum / 5;
+		for (int i = 0; i < r.card.size() - threenum * 3; i++)
 		{
 			if (r.card.get(i).intValue() > lastbig.max)
 			{
 				boolean find = true;
-				for (int j = 0; j < lastbig.cardnum - 2 - 3; j += 3)
+				for (int j = 0; j < threenum * 3 - 3; j += 3)
 				{
 					if (r.card.get(i + j).intValue() == r.card.get(i + j + 1).intValue()
 							&& r.card.get(i + j).intValue() == r.card.get(i + j + 2).intValue()
@@ -596,28 +632,44 @@ public class Logic
 
 				if (find)
 				{
-					for (int j = 0; j < r.card.size() - 1; j++)
-					{
-						if (r.card.get(j).intValue() == r.card.get(j + 1).intValue()
-								&& (j < i || j > i + lastbig.cardnum - 2)
-								&& (j + 1 < i || j + 1 > i + lastbig.cardnum - 2))
-						{
-							String cardstr = "";
-							for (int k = 0; k < lastbig.cardnum - 2; k++)
-							{
-								if (k != 0)
-								{
-									cardstr += ",";
-								}
-								cardstr += r.card.get(i + k).intValue();
-							}
-							cardstr += "," + r.card.get(j).intValue();
-							cardstr += "," + r.card.get(j + 1).intValue();
+					ret = ChooseDoubleThreePlusTwo(ret, r, lastbig, 0, threenum, i, i + threenum * 3, "", threenum);
+				}
+			}
+		}
 
-							ret.add(new CardInfo(CardType.ct_double_three_plus_two, r.card.get(i).intValue(), r,
-									cardstr, lastbig.cardnum));
-						}
-					}
+		return ret;
+	}
+
+	private ArrayList<CardInfo> ChooseDoubleThreePlusTwo(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig, int start,
+			int deps, int lowex, int highex, String card, int threenum)
+	{
+		if (deps == 0)
+		{
+			String cardstr = "";
+			for (int k = 0; k < threenum * 3; k++)
+			{
+				if (k != 0)
+				{
+					cardstr += ",";
+				}
+				cardstr += r.card.get(lowex + k).intValue();
+			}
+			cardstr += card;
+
+			ret.add(new CardInfo(CardType.ct_double_three_plus_two, r.card.get(lowex).intValue(), r, cardstr,
+					lastbig.cardnum));
+
+			return ret;
+		}
+
+		for (int i = start; i < r.card.size() - 1; i++)
+		{
+			if ((i < lowex || i >= highex) && (i + 1 < lowex || i + 1 >= highex))
+			{
+				if (r.card.get(i).intValue() == r.card.get(i + 1).intValue())
+				{
+					String mycard = card + "," + r.card.get(i).intValue() + "," + r.card.get(i + 1).intValue();
+					ret = ChooseDoubleThreePlusTwo(ret, r, lastbig, i + 2, deps - 1, lowex, highex, mycard, threenum);
 				}
 			}
 		}
@@ -627,12 +679,13 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerDoubleThreePlusOne(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
-		for (int i = 0; i < r.card.size() - (lastbig.cardnum - 1); i++)
+		int threenum = lastbig.cardnum / 4;
+		for (int i = 0; i < r.card.size() - threenum * 3; i++)
 		{
 			if (r.card.get(i).intValue() > lastbig.max)
 			{
 				boolean find = true;
-				for (int j = 0; j < lastbig.cardnum - 1 - 3; j += 3)
+				for (int j = 0; j < threenum * 3 - 3; j += 3)
 				{
 					if (r.card.get(i + j).intValue() == r.card.get(i + j + 1).intValue()
 							&& r.card.get(i + j).intValue() == r.card.get(i + j + 2).intValue()
@@ -650,26 +703,42 @@ public class Logic
 
 				if (find)
 				{
-					for (int j = 0; j < r.card.size(); j++)
-					{
-						if (j < i || j > i + lastbig.cardnum - 1)
-						{
-							String cardstr = "";
-							for (int k = 0; k < lastbig.cardnum - 1; k++)
-							{
-								if (k != 0)
-								{
-									cardstr += ",";
-								}
-								cardstr += r.card.get(i + k).intValue();
-							}
-							cardstr += "," + r.card.get(j).intValue();
-
-							ret.add(new CardInfo(CardType.ct_double_three_plus_one, r.card.get(i).intValue(), r,
-									cardstr, lastbig.cardnum));
-						}
-					}
+					ret = ChooseDoubleThreePlusOne(ret, r, lastbig, 0, threenum, i, i + threenum * 3, "", threenum);
 				}
+			}
+		}
+
+		return ret;
+	}
+
+	private ArrayList<CardInfo> ChooseDoubleThreePlusOne(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig, int start,
+			int deps, int lowex, int highex, String card, int threenum)
+	{
+		if (deps == 0)
+		{
+			String cardstr = "";
+			for (int k = 0; k < threenum * 3; k++)
+			{
+				if (k != 0)
+				{
+					cardstr += ",";
+				}
+				cardstr += r.card.get(lowex + k).intValue();
+			}
+			cardstr += card;
+
+			ret.add(new CardInfo(CardType.ct_double_three_plus_one, r.card.get(lowex).intValue(), r, cardstr,
+					lastbig.cardnum));
+
+			return ret;
+		}
+
+		for (int i = start; i < r.card.size(); i++)
+		{
+			if (i < lowex || i >= highex)
+			{
+				String mycard = card + "," + r.card.get(i).intValue();
+				ret = ChooseDoubleThreePlusOne(ret, r, lastbig, i + 1, deps - 1, lowex, highex, mycard, threenum);
 			}
 		}
 
@@ -1084,16 +1153,22 @@ public class Logic
 		}
 
 		lastbig.type = CardType.ct_double_three_plus_one;
-		for (int i = 7; i <= 13; i += 3)
+		for (int i = 8; i <= 16; i += 4)
 		{
 			lastbig.cardnum = i;
 			ret = FindBiggerDoubleThreePlusOne(ret, r, lastbig);
 		}
 
 		lastbig.type = CardType.ct_double_three_plus_two;
-		for (int i = 8; i <= 14; i += 3)
+		for (int i = 10; i <= 15; i += 5)
 		{
+			lastbig.cardnum = i;
 			ret = FindBiggerDoubleThreePlusTwo(ret, r, lastbig);
+		}
+
+		if (have_double_king(r))
+		{
+			ret.add(new CardInfo(CardType.ct_double_king, 15, r, "14,15", 2));
 		}
 
 		return ret;
