@@ -1,5 +1,6 @@
 package ai;
 
+import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -139,19 +140,40 @@ public class Logic
 		//MinMaxCard(6, r, lastbig, ret);
 		//AlphaBeta(12, r, lastbig, ret, Integer.MIN_VALUE, Integer.MAX_VALUE);
 		MCTSNode root = new MCTSNode();
-
-		ArrayList<CardInfo> outlist;
-		if (lastbig.r == r)
+		CardInfo ret = MCTS(1000, r, root, lastbig);
+		String dump = DumpMCTS(0, root, 0);
+		try
 		{
-			outlist = FindFirstOutCard(r);
+			FileWriter fileWriter = new FileWriter("Result.txt", true);
+			fileWriter.write(
+					"[" + r.no + "] :(" + r.CardState() + ")" + (ret.cardstr.isEmpty() ? "pass" : ret.cardstr) + "\n");
+			fileWriter.write(dump);
+			fileWriter.flush();
+			fileWriter.close();
 		}
-		else
+		catch (Exception e)
 		{
-			outlist = FindBigger(r, lastbig);
-		}
 
-		CardInfo ret = MCTS(outlist.size() * 100, r, root, lastbig);
+		}
 		return ret;
+	}
+
+	public String DumpMCTS(int no, MCTSNode node, int deps)
+	{
+		String str = "";
+		for (int i = 0; i < deps; i++)
+		{
+			str += "\t";
+		}
+		str += "(" + no + ")" + "[{" + (node.cardInfo != null ? node.cardInfo.cardstr : "null") + "}," + node.Value
+				+ "," + node.N + "]\n";
+		int i = 0;
+		for (MCTSNode s : node.son)
+		{
+			str += DumpMCTS(i, s, deps + 1);
+			i++;
+		}
+		return str;
 	}
 
 	public CardInfo MCTS(int num, Robot r, MCTSNode node, CardInfo lastbig)
