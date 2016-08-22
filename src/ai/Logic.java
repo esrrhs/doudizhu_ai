@@ -79,9 +79,9 @@ public class Logic
 		boolean test = true;
 		if (test)
 		{
-			String a = "1,1,3,3,4,6,7,7,8,9,9,11,12,13,13,15";
-			String b = "1,2,5,6,7,9,10,10,11,11,11,12,13";
-			String c = "1,2,2,3,3,4,4,5,5,6,8,8,10,12";
+			String a = "1,1,3,3,5,6,6,6,8,8,9,10,11,11,11,12,13,13,13,14";
+			String b = "1,1,2,2,3,3,4,5,5,7,8,9,9,9,11,12,15";
+			String c = "2,2,4,4,4,5,6,7,7,7,8,10,10,10,12,12,13";
 
 			for (String s : a.split("\\,"))
 			{
@@ -135,9 +135,138 @@ public class Logic
 
 	public CardInfo OutCard(Robot r, CardInfo lastbig)
 	{
-		CardInfo ret = new CardInfo();
+		//CardInfo ret = new CardInfo();
 		//MinMaxCard(6, r, lastbig, ret);
-		AlphaBeta(6, r, lastbig, ret, Integer.MIN_VALUE, Integer.MAX_VALUE);
+		//AlphaBeta(12, r, lastbig, ret, Integer.MIN_VALUE, Integer.MAX_VALUE);
+		MCTSNode root = new MCTSNode();
+
+		ArrayList<CardInfo> outlist;
+		if (lastbig.r == r)
+		{
+			outlist = FindFirstOutCard(r);
+		}
+		else
+		{
+			outlist = FindBigger(r, lastbig);
+		}
+
+		CardInfo ret = MCTS(outlist.size() * 100, r, root, lastbig);
+		return ret;
+	}
+
+	public CardInfo MCTS(int num, Robot r, MCTSNode node, CardInfo lastbig)
+	{
+		for (int i = 0; i < num; i++)
+		{
+			MCTSCal(r, node, lastbig);
+		}
+
+		int max = Integer.MIN_VALUE;
+		CardInfo cardinfo = null;
+		for (MCTSNode s : node.son)
+		{
+			if (s.Value > max)
+			{
+				max = s.Value;
+				cardinfo = s.cardInfo;
+			}
+		}
+
+		return cardinfo;
+	}
+
+	public int MCTSCal(Robot r, MCTSNode node, CardInfo lastbig)
+	{
+		if (IsEnd())
+		{
+			if (A.IsEnd())
+			{
+				return 1;
+			}
+			else
+			{
+				return -1;
+			}
+		}
+
+		if (node.son.isEmpty())
+		{
+			ArrayList<CardInfo> outlist;
+			if (lastbig.r == r)
+			{
+				outlist = FindFirstOutCard(r);
+			}
+			else
+			{
+				outlist = FindBigger(r, lastbig);
+			}
+
+			for (CardInfo c : outlist)
+			{
+				MCTSNode s = new MCTSNode();
+				s.cardInfo = c;
+				node.son.add(s);
+			}
+		}
+
+		MCTSNode select = MCTSChoose(r, node);
+
+		r.RemoveCard(select.cardInfo);
+
+		CardInfo newlastbig;
+		if (select.cardInfo.type == CardType.ct_pass)
+		{
+			newlastbig = (CardInfo) lastbig.clone();
+		}
+		else
+		{
+			newlastbig = (CardInfo) select.cardInfo.clone();
+		}
+
+		Robot next = r.next;
+		int ret = MCTSCal(next, select, newlastbig);
+
+		r.AddCard(select.cardInfo);
+
+		if (r.no == 0)
+		{
+			if (ret > 0)
+			{
+				select.Value++;
+			}
+		}
+		else
+		{
+			if (ret < 0)
+			{
+				select.Value++;
+			}
+		}
+
+		node.N++;
+
+		return ret;
+	}
+
+	public MCTSNode MCTSChoose(Robot r, MCTSNode node)
+	{
+		int c = 1;
+		float max = -999999;
+		MCTSNode ret = null;
+		for (MCTSNode s : node.son)
+		{
+			float value = 0;
+			if (s.N == 0)
+			{
+				return s;
+			}
+			value += (float) s.Value / s.N + c * (Math.sqrt(2 * Math.log(node.N) / s.N));
+			if (value > max)
+			{
+				max = value;
+				ret = s;
+			}
+		}
 		return ret;
 	}
 
@@ -416,12 +545,11 @@ public class Logic
 		return a - (b + c);
 	}
 
-
 	public int EveluationNum(int num)
 	{
 		return (10 - num) * EveluationOne(1);
 	}
-	
+
 	public int EveluationOne(int card)
 	{
 		return card * card / 2;
@@ -436,7 +564,6 @@ public class Logic
 	{
 		return card * EveluationTwo(5);
 	}
-	
 
 	public int EveluationFour(int card)
 	{
@@ -447,7 +574,7 @@ public class Logic
 	{
 		return num * EveluationOne(card);
 	}
-	
+
 	public int EveluationCard(Robot r)
 	{
 		HashMap<Integer, Integer> tmp = new HashMap<Integer, Integer>();
@@ -523,7 +650,7 @@ public class Logic
 		}
 
 		ret += EveluationNum(r.card.size());
-		
+
 		return ret;
 	}
 
