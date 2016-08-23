@@ -1,11 +1,12 @@
 package ai;
 
-import java.util.ArrayList;
+import java.util.HashMap;
 
 public class MCTSNode
 {
 	public int N;
 	public int Value;
-	public ArrayList<MCTSNode> son = new ArrayList<MCTSNode>();
+	public HashMap<CardInfo, MCTSNode> son = new HashMap<CardInfo, MCTSNode>();
 	public CardInfo cardInfo;
+	public boolean sonall;
 }

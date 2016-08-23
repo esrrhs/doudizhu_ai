@@ -17,16 +17,14 @@ public class Table
 		B.next = C;
 		C.next = A;
 
+		long begin = System.currentTimeMillis();
 		{
 			A.Clear();
 			B.Clear();
 			C.Clear();
 			l.Run();
 		}
+		System.out.println("time " + (System.currentTimeMillis() - begin));
 	}
 
-	public String GetCardState()
-	{
-		return A.CardState() + "|" + B.CardState() + "|" + C.CardState();
-	}
 }

@@ -1,7 +1,5 @@
 package ai;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
 
@@ -38,7 +36,7 @@ public class Robot
 		String ret = "";
 		for (int i : card)
 		{
-			ret += i + ",";
+			ret += Logic.CardName[i - 1] + ",";
 		}
 		return ret;
 	}
@@ -50,34 +48,7 @@ public class Robot
 
 		System.out.print("[" + no + "] :(" + CardState() + ")");
 
-		if (no == 4)
-		{
-			System.out.println("type|max|cardstr|cardnum");
-			String str;
-			try
-			{
-				BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-				str = br.readLine();
-				String[] tmp = str.split("\\|");
-
-				CardType type = CardType.values()[Integer.parseInt(tmp[0])];
-				int max = Integer.parseInt(tmp[1]);
-				Robot r = this;
-				String cardstr = tmp[2];
-				int cardnum = Integer.parseInt(tmp[3]);
-
-				out = new CardInfo(type, max, r, cardstr, cardnum);
-			}
-			catch (Exception e)
-			{
-
-			}
-		}
-		else
-		{
-			// 记录牌面
-			out = OutCard(lastbig);
-		}
+		out = OutCard(lastbig);
 
 		if (out.type == CardType.ct_pass)
 		{
@@ -88,7 +59,7 @@ public class Robot
 			ret = out;
 		}
 
-		System.out.println((out.cardstr.isEmpty() ? "pass" : out.cardstr));
+		System.out.println(out.CardStr());
 
 		RemoveCard(out);
 
@@ -97,27 +68,31 @@ public class Robot
 
 	public void AddCard(CardInfo out)
 	{
-		if (!out.cardstr.isEmpty())
+		if (out.cardstr.length > 0)
 		{
-			String[] strcards = out.cardstr.split(",");
-			for (String s : strcards)
+			for (int c : out.cardstr)
 			{
-				Integer card = Integer.valueOf(s);
-				this.card.add(card);
+				int index = card.size();
+				for (int i = 0; i < card.size(); i++)
+				{
+					if (c <= card.get(i))
+					{
+						index = i;
+						break;
+					}
+				}
+				card.add(index, c);
 			}
 		}
-		Collections.sort(card);
 	}
 
 	public void RemoveCard(CardInfo out)
 	{
-		if (!out.cardstr.isEmpty())
+		if (out.cardstr.length > 0)
 		{
-			String[] strcards = out.cardstr.split(",");
-			for (String s : strcards)
+			for (Integer c : out.cardstr)
 			{
-				Integer card = Integer.valueOf(s);
-				this.card.remove(card);
+				this.card.remove(c);
 			}
 		}
 	}
@@ -129,7 +104,6 @@ public class Robot
 
 	public void Win()
 	{
-		// 存储此次的牌面和出牌
 		System.out.println("[" + no + "] :Win");
 
 	}
