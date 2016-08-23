@@ -92,9 +92,9 @@ public class Logic
 		boolean test = false;
 		if (test)
 		{
-			String a = "5,6,7,8,8,10,Q,Q,K,K,A,A";
-			String b = "3,4,5,6,7,8,8,9,10,10,J,J,K,K,A,A,大王";
-			String c = "4,5,6,6,7,7,10,J,J,Q,Q,2,小王";
+			String a = "3,6,8,10,10,Q,Q,K,K,A,A,2,2,2";
+			String b = "3,4,4,5,5,7,8,8,9,9,10,J,J,Q,K,2,大王";
+			String c = "3,3,6,7,7,7,8,9,9,10,J,J,Q,K,A,A,小王";
 
 			for (String s : a.split("\\,"))
 			{
@@ -251,6 +251,10 @@ public class Logic
 			if (s.Value > max)
 			{
 				max = s.Value;
+				maxtype = s.cardInfo.type;
+			}
+			else if (s.Value >= max * 99 / 100 && maxtype == CardType.ct_pass)
+			{
 				maxtype = s.cardInfo.type;
 			}
 		}
