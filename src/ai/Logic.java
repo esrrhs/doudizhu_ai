@@ -89,12 +89,12 @@ public class Logic
 
 	public void Dispatch()
 	{
-		boolean test = true;
+		boolean test = false;
 		if (test)
 		{
-			String a = "3,4,5,5,7,8,8,8,9,9,9,10,10,10,J,Q,Q,K,A,2";
-			String b = "3,3,4,5,6,6,7,7,8,J,J,J,K,A,2,2,大王";
-			String c = "3,4,4,5,6,6,7,9,10,Q,Q,K,K,A,A,2,小王";
+			String a = "5,6,7,8,8,10,Q,Q,K,K,A,A";
+			String b = "3,4,5,6,7,8,8,9,10,10,J,J,K,K,A,A,大王";
+			String c = "4,5,6,6,7,7,10,J,J,Q,Q,2,小王";
 
 			for (String s : a.split("\\,"))
 			{
@@ -243,6 +243,7 @@ public class Logic
 			}
 		}
 
+		CardType maxtype = null;
 		int max = Integer.MIN_VALUE;
 		for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
 		{
@@ -250,6 +251,7 @@ public class Logic
 			if (s.Value > max)
 			{
 				max = s.Value;
+				maxtype = s.cardInfo.type;
 			}
 		}
 
@@ -259,7 +261,7 @@ public class Logic
 		for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
 		{
 			MCTSNode s = e.getValue();
-			if (s.Value >= max * 90 / 100)
+			if (s.Value >= max * 90 / 100 && maxtype == s.cardInfo.type)
 			{
 				int sum = 0;
 				for (int c : s.cardInfo.cardstr)
