@@ -89,12 +89,12 @@ public class Logic
 
 	public void Dispatch()
 	{
-		boolean test = false;
+		boolean test = true;
 		if (test)
 		{
-			String a = "3,6,8,10,10,Q,Q,K,K,A,A,2,2,2";
-			String b = "3,4,4,5,5,7,8,8,9,9,10,J,J,Q,K,2,大王";
-			String c = "3,3,6,7,7,7,8,9,9,10,J,J,Q,K,A,A,小王";
+			String a = "6,7,7,8,9,9,10,J,Q,A,2,大王";
+			String b = "3,3,4,4,7,8,8,9,10,J,A,2,小王";
+			String c = "3,4,4,5,6,6,7,8,9,10,10,J,K,A,A,2,2";
 
 			for (String s : a.split("\\,"))
 			{
@@ -159,7 +159,7 @@ public class Logic
 		{
 			MCTSNode root = new MCTSNode();
 			CardInfo ret = MCTS(10000, r, root, lastbig);
-			boolean isdump = false;
+			boolean isdump = true;
 			if (isdump)
 			{
 				String dump = DumpMCTS(10000, 0, root, 0, 2);
@@ -215,6 +215,45 @@ public class Logic
 		return str;
 	}
 
+	public int MCTSOutCardLevel(CardType type)
+	{
+		switch (type)
+		{
+		case ct_pass:
+			return 0;
+		case ct_single:
+			return 1; 
+		case ct_double:
+			return 2;
+		case ct_three:
+			return 3;
+		case ct_boom:
+			return -1;
+		case ct_three_plus_one:
+			return 4;
+		case ct_three_plus_two:
+			return 5; 
+		case ct_four_plus_two:
+			return 6;
+		case ct_four_plus_two_double:
+			return 7;
+		case ct_continue:
+			return 8;
+		case ct_double_continue:
+			return 9;
+		case ct_double_three:
+			return 8;
+		case ct_double_three_plus_one:
+			return 9; 
+		case ct_double_three_plus_two:
+			return 10;
+		case ct_double_king:
+			return -2;
+		default:
+			return 0;	
+		}
+	}
+	
 	public CardInfo MCTS(int num, Robot r, MCTSNode node, CardInfo lastbig)
 	{
 		for (int i = 0; i < num; i++)
@@ -253,9 +292,13 @@ public class Logic
 				max = s.Value;
 				maxtype = s.cardInfo.type;
 			}
-			else if (s.Value >= max * 99 / 100 && maxtype == CardType.ct_pass)
+			else if (s.Value >= max * 99 / 100)
 			{
-				maxtype = s.cardInfo.type;
+				// 优先
+				if (MCTSOutCardLevel(s.cardInfo.type) > MCTSOutCardLevel(maxtype))
+				{
+					maxtype = s.cardInfo.type;
+				}
 			}
 		}
 
@@ -265,7 +308,7 @@ public class Logic
 		for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
 		{
 			MCTSNode s = e.getValue();
-			if (s.Value >= max * 90 / 100 && maxtype == s.cardInfo.type)
+			if (s.Value >= max * 99 / 100 && maxtype == s.cardInfo.type)
 			{
 				int sum = 0;
 				for (int c : s.cardInfo.cardstr)
@@ -1343,28 +1386,11 @@ public class Logic
 		ArrayList<CardInfo> ret = new ArrayList<CardInfo>();
 
 		CardInfo lastbig = new CardInfo(CardType.ct_single, -1, r, new int[0], 0);
-		lastbig.type = CardType.ct_single;
-		{
-			lastbig.cardnum = 1;
-			ret = FindBiggerSingle(ret, r, lastbig);
-		}
-
-		lastbig.type = CardType.ct_double;
-		{
-			lastbig.cardnum = 2;
-			ret = FindBiggerDouble(ret, r, lastbig);
-		}
-
+		
 		lastbig.type = CardType.ct_three;
 		{
 			lastbig.cardnum = 3;
 			ret = FindBiggerThree(ret, r, lastbig);
-		}
-
-		lastbig.type = CardType.ct_boom;
-		{
-			lastbig.cardnum = 4;
-			ret = FindBiggerBoom(ret, r, lastbig);
 		}
 
 		lastbig.type = CardType.ct_three_plus_one;
@@ -1424,6 +1450,24 @@ public class Logic
 		{
 			lastbig.cardnum = i;
 			ret = FindBiggerDoubleThreePlusTwo(ret, r, lastbig);
+		}
+
+		lastbig.type = CardType.ct_double;
+		{
+			lastbig.cardnum = 2;
+			ret = FindBiggerDouble(ret, r, lastbig);
+		}
+		
+		lastbig.type = CardType.ct_single;
+		{
+			lastbig.cardnum = 1;
+			ret = FindBiggerSingle(ret, r, lastbig);
+		}
+
+		lastbig.type = CardType.ct_boom;
+		{
+			lastbig.cardnum = 4;
+			ret = FindBiggerBoom(ret, r, lastbig);
 		}
 
 		if (have_double_king(r))
