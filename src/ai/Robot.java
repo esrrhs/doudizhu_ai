@@ -1,14 +1,12 @@
 package ai;
 
-import java.util.ArrayList;
-import java.util.Collections;
-
 public class Robot
 {
 	public int no;
-	public ArrayList<Integer> card = new ArrayList<Integer>();
 	public Table t;
 	public Robot next;
+	public int[] cardmap = new int[16];
+	public int cardnum;
 
 	public Robot(Table t, int no)
 	{
@@ -18,25 +16,28 @@ public class Robot
 
 	public void Clear()
 	{
-		card.clear();
+		for (int i = 0; i < cardmap.length; i++)
+		{
+			cardmap[i] = 0;
+		}
+		cardnum = 0;
 	}
 
 	public void AddCard(int i)
 	{
-		card.add(i);
-	}
-
-	public void SortCard()
-	{
-		Collections.sort(card);
+		cardmap[i]++;
+		cardnum++;
 	}
 
 	public String CardState()
 	{
 		String ret = "";
-		for (int i : card)
+		for (int i = 0; i < cardmap.length; i++)
 		{
-			ret += Logic.CardName[i - 1] + ",";
+			for (int j = 0; j < cardmap[i]; j++)
+			{
+				ret += Logic.CardName[i - 1] + ",";
+			}
 		}
 		return ret;
 	}
@@ -72,29 +73,22 @@ public class Robot
 		{
 			for (int c : out.cardstr)
 			{
-				int index = card.size();
-				for (int i = 0; i < card.size(); i++)
-				{
-					if (c <= card.get(i))
-					{
-						index = i;
-						break;
-					}
-				}
-				card.add(index, c);
+				cardmap[c]++;
 			}
 		}
+		cardnum += out.cardstr.length;
 	}
 
 	public void RemoveCard(CardInfo out)
 	{
 		if (out.cardstr.length > 0)
 		{
-			for (Integer c : out.cardstr)
+			for (int c : out.cardstr)
 			{
-				this.card.remove(c);
+				cardmap[c]--;
 			}
 		}
+		cardnum -= out.cardstr.length;
 	}
 
 	public CardInfo OutCard(CardInfo lastbig)
@@ -110,6 +104,6 @@ public class Robot
 
 	public boolean IsEnd()
 	{
-		return card.isEmpty();
+		return cardnum == 0;
 	}
 }
