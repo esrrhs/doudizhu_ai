@@ -91,9 +91,9 @@ public class Logic
 		boolean test = false;
 		if (test)
 		{
-			String a = "10,Q,Q,K,K,K,2,大王";
-			String b = "3,4,5,5,7,7,9,10,10,J,J,J,Q,A,A,2,2";
-			String c = "3,3,4,4,5,6,6,8,8,9,J,Q,K,A,A,2,小王";
+			String a = "3,4,小王,大王";
+			String b = "3,Q";
+			String c = "3";
 
 			for (String s : a.split("\\,"))
 			{
@@ -276,7 +276,27 @@ public class Logic
 		if (totalvalue >= node.N)
 		{
 			// 必赢
+			for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
+			{
+				MCTSNode s = e.getValue();
+				if (s.cardInfo.cardnum >= r.cardnum && s.cardInfo.type != CardType.ct_four_plus_two && s.cardInfo.type != CardType.ct_four_plus_two_double)
+				{
+					return s.cardInfo;
+				}
+			}
+			
+			int minmax = 999999;
 			CardInfo cardinfo = null;
+			for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
+			{
+				MCTSNode s = e.getValue();
+				if (s.cardInfo.max < minmax && r.cardmap[s.cardInfo.max] != 4 && !(have_double_king(r) && s.cardInfo.max == 14 || s.cardInfo.max == 15))
+				{
+					cardinfo = s.cardInfo;
+					minmax = s.cardInfo.max;
+				}
+			}
+			
 			for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
 			{
 				MCTSNode s = e.getValue();
@@ -291,11 +311,15 @@ public class Logic
 					{
 						cardinfo = s.cardInfo;
 					}
-					else if (s.cardInfo.max == cardinfo.max && s.cardInfo.cardnum > cardinfo.cardnum)
+					else if (cardinfo.type == CardType.ct_double_king)
 					{
 						cardinfo = s.cardInfo;
 					}
-					else if (s.cardInfo.type == cardinfo.type)
+					else if (s.cardInfo.max == cardinfo.max && s.cardInfo.cardnum > cardinfo.cardnum  && s.cardInfo.type != CardType.ct_four_plus_two && s.cardInfo.type != CardType.ct_four_plus_two_double )
+					{
+						cardinfo = s.cardInfo;
+					}
+					else if (s.cardInfo.type == cardinfo.type && r.cardmap[s.cardInfo.max] != 4)
 					{
 						if (MCTSCompare(s.cardInfo, cardinfo))
 						{
@@ -1520,19 +1544,9 @@ public class Logic
 
 	public boolean is_need_boom(Robot r)
 	{
-		if (r.no == 0)
+		if (A.cardnum <= 5 || B.cardnum <= 5 || C.cardnum <= 5)
 		{
-			if (B.cardnum <= 5 || C.cardnum <= 5)
-			{
-				return true;
-			}
-		}
-		else
-		{
-			if (A.cardnum <= 5)
-			{
-				return true;
-			}
+			return true;
 		}
 		return false;
 	}
