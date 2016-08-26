@@ -39,7 +39,7 @@ public class Logic
 		CardInfo lastbig = null;
 		Robot cur = null;
 
-		boolean test = true;
+		boolean test = false;
 		if (!test)
 		{
 			lastbig = new CardInfo(CardType.ct_pass, 0, A, new int[0], 0);
@@ -47,7 +47,7 @@ public class Logic
 		}
 		else
 		{
-			cur = C;
+			cur = A;
 
 			boolean first = true;
 			if (first)
@@ -111,12 +111,12 @@ public class Logic
 
 	public void Dispatch()
 	{
-		boolean test = true;
+		boolean test = false;
 		if (test)
 		{
-			String a = "8,9,Q,K,K,2,2";
-			String b = "3,5,J,K,A,2";
-			String c = "3,4,5,5,8,8,9,J,J,K,小王,大王";
+			String a = "3,3,5,5,5,6,6,6,7,7,7,9,J,Q,K,A,A,2,2,大王";
+			String b = "4,4,4,5,6,8,8,9,9,10,10,10,J,Q,K,2";
+			String c = "3,3,4,7,8,8,9,10,J,J,Q,Q,K,K,A,A,2";
 
 			for (String s : a.split("\\,"))
 			{
@@ -754,7 +754,7 @@ public class Logic
 					r.cardmap[i + j] -= 3;
 				}
 
-				ret = ChooseDoubleThreePlusOne(ret, r, lastbig, i, num, new int[0], i);
+				ret = ChooseDoubleThreePlusOne(ret, r, lastbig, i, num, new int[0], 1);
 
 				for (int j = 0; j < num; j++)
 				{
@@ -1214,14 +1214,94 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerDouble(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
-		for (int i = lastbig.max + 1; i <= 13; i++)
+		if (lastbig.max == 0)
 		{
-			if (r.cardmap[i] > 1)
+			boolean havethree = false;
+			for (int i = 1; i <= 15; i++)
 			{
-				int[] cardstr = new int[lastbig.cardnum];
-				cardstr[0] = i;
-				cardstr[1] = i;
-				ret.add(new CardInfo(CardType.ct_double, i, r, cardstr, lastbig.cardnum));
+				if (r.cardmap[i] >= 3)
+				{
+					havethree = true;
+					break;
+				}
+			}
+
+			int max = 0;
+			if (!havethree)
+			{
+				if (r.no == 0)
+				{
+					for (int i = 1; i <= 15; i++)
+					{
+						if (B.cardmap[i] > 1)
+						{
+							if (i > max)
+							{
+								max = i;
+							}
+						}
+					}
+
+					for (int i = 1; i <= 15; i++)
+					{
+						if (C.cardmap[i] > 1)
+						{
+							if (i > max)
+							{
+								max = i;
+							}
+						}
+					}
+				}
+				else
+				{
+					for (int i = 1; i <= 15; i++)
+					{
+						if (A.cardmap[i] > 1)
+						{
+							if (i > max)
+							{
+								max = i;
+							}
+						}
+					}
+				}
+			}
+
+			int simpledouble = 0;
+			for (int i = lastbig.max + 1; i <= 13; i++)
+			{
+				if (r.cardmap[i] > 1)
+				{
+					if (!havethree && IsSimpleDouble(r, i))
+					{
+						if (simpledouble >= 2 && i > max)
+						{
+							continue;
+						}
+
+						simpledouble++;
+					}
+
+					int[] cardstr = new int[lastbig.cardnum];
+					cardstr[0] = i;
+					cardstr[1] = i;
+					ret.add(new CardInfo(CardType.ct_double, i, r, cardstr, lastbig.cardnum));
+				}
+			}
+			return ret;
+		}
+		else
+		{
+			for (int i = lastbig.max + 1; i <= 13; i++)
+			{
+				if (r.cardmap[i] > 1)
+				{
+					int[] cardstr = new int[lastbig.cardnum];
+					cardstr[0] = i;
+					cardstr[1] = i;
+					ret.add(new CardInfo(CardType.ct_double, i, r, cardstr, lastbig.cardnum));
+				}
 			}
 		}
 		return ret;
