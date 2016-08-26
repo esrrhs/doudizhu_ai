@@ -36,36 +36,59 @@ public class Logic
 
 	public void Run()
 	{
+		CardInfo lastbig = null;
+		Robot cur = null;
+
+		boolean test = false;
+		if (!test)
+		{
+			lastbig = new CardInfo(CardType.ct_pass, 0, A, new int[0], 0);
+			cur = A;
+		}
+		else
+		{
+			cur = A;
+
+			boolean first = true;
+			if (first)
+			{
+				lastbig = new CardInfo(CardType.ct_pass, 0, cur, new int[0], 0);
+			}
+			else
+			{
+				lastbig = new CardInfo(CardType.ct_pass, 0, C, new int[0], 0);
+
+				lastbig.type = CardType.ct_three_plus_one;
+				lastbig.r = C;
+				lastbig.max = GetCardFromName("3");
+				lastbig.cardnum = 4;
+				lastbig.cardstr = new int[]
+				{ GetCardFromName("3"), GetCardFromName("3"), GetCardFromName("3"), GetCardFromName("4") };
+			}
+		}
+
 		// 发牌
 		Dispatch();
-
-		CardInfo lastbig = new CardInfo(CardType.ct_single, 0, A, new int[0], 1);
 
 		// 开始打
 		while (true)
 		{
-			lastbig = A.Go(lastbig);
+			lastbig = cur.Go(lastbig);
 			if (IsEnd())
 			{
-				A.Win();
+				if (cur == A)
+				{
+					A.Win();
+				}
+				else
+				{
+					B.Win();
+					C.Win();
+				}
 				break;
 			}
 
-			lastbig = B.Go(lastbig);
-			if (IsEnd())
-			{
-				B.Win();
-				C.Win();
-				break;
-			}
-
-			lastbig = C.Go(lastbig);
-			if (IsEnd())
-			{
-				B.Win();
-				C.Win();
-				break;
-			}
+			cur = cur.next;
 		}
 	}
 
@@ -91,9 +114,9 @@ public class Logic
 		boolean test = false;
 		if (test)
 		{
-			String a = "3,4,小王,大王";
-			String b = "3,Q";
-			String c = "3";
+			String a = "3,3,3,4,4,4,5,6,6,7,7,J,J,J,J,K,A,A";
+			String b = "4,Q,Q,K,2";
+			String c = "3,4,5,5,5,6,6,7,9,9,9,10,K,A";
 
 			for (String s : a.split("\\,"))
 			{
@@ -148,6 +171,7 @@ public class Logic
 		try
 		{
 			FileWriter fileWriter = new FileWriter("Result.txt");
+			fileWriter.flush();
 			fileWriter.close();
 		}
 		catch (Exception e)
@@ -159,7 +183,7 @@ public class Logic
 	public CardInfo OutCard(Robot r, CardInfo lastbig)
 	{
 		MCTSNode root = new MCTSNode();
-		int N = 10000;
+		int N = 50000;
 		CardInfo ret = MCTS(N, r, root, lastbig);
 		boolean isdump = true;
 		if (isdump)
@@ -199,7 +223,7 @@ public class Logic
 		}
 		else
 		{
-			str += "(" + no + ")" + "[{";
+			str += "(" + no + ")<" + node.cardInfo.r.no + ">[{";
 
 			str += node.cardInfo.CardStr();
 
@@ -230,8 +254,8 @@ public class Logic
 			rsum += c;
 		}
 
-		int lvalue = lsum + (20 - l.cardnum) * 8;
-		int rvalue = rsum + (20 - r.cardnum) * 8;
+		int lvalue = lsum + (20 - l.cardnum) * 15;
+		int rvalue = rsum + (20 - r.cardnum) * 15;
 
 		return lvalue < rvalue;
 	}
@@ -267,36 +291,43 @@ public class Logic
 		}
 
 		int totalvalue = 0;
+		int totalN = 0;
 		for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
 		{
 			MCTSNode s = e.getValue();
-			totalvalue += s.Value;
+			if (s.cardInfo.type != CardType.ct_pass)
+			{
+				totalvalue += s.Value;
+				totalN += s.N;
+			}
 		}
 
-		if (totalvalue >= node.N)
+		if (totalvalue >= totalN)
 		{
 			// 必赢
 			for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
 			{
 				MCTSNode s = e.getValue();
-				if (s.cardInfo.cardnum >= r.cardnum && s.cardInfo.type != CardType.ct_four_plus_two && s.cardInfo.type != CardType.ct_four_plus_two_double)
+				if (s.cardInfo.cardnum >= r.cardnum && s.cardInfo.type != CardType.ct_four_plus_two
+						&& s.cardInfo.type != CardType.ct_four_plus_two_double)
 				{
 					return s.cardInfo;
 				}
 			}
-			
+
 			int minmax = 999999;
 			CardInfo cardinfo = null;
 			for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
 			{
 				MCTSNode s = e.getValue();
-				if (s.cardInfo.max < minmax && r.cardmap[s.cardInfo.max] != 4 && !(have_double_king(r) && s.cardInfo.max == 14 || s.cardInfo.max == 15))
+				if (s.cardInfo.max < minmax && r.cardmap[s.cardInfo.max] != 4
+						&& !(have_double_king(r) && s.cardInfo.max == 14 || s.cardInfo.max == 15))
 				{
 					cardinfo = s.cardInfo;
 					minmax = s.cardInfo.max;
 				}
 			}
-			
+
 			for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
 			{
 				MCTSNode s = e.getValue();
@@ -311,11 +342,13 @@ public class Logic
 					{
 						cardinfo = s.cardInfo;
 					}
-					else if (cardinfo.type == CardType.ct_double_king)
+					else if (cardinfo.type == CardType.ct_double_king && cardinfo.max != 14 && cardinfo.max != 15)
 					{
 						cardinfo = s.cardInfo;
 					}
-					else if (s.cardInfo.max == cardinfo.max && s.cardInfo.cardnum > cardinfo.cardnum  && s.cardInfo.type != CardType.ct_four_plus_two && s.cardInfo.type != CardType.ct_four_plus_two_double )
+					else if (s.cardInfo.max == cardinfo.max && s.cardInfo.cardnum > cardinfo.cardnum
+							&& s.cardInfo.type != CardType.ct_four_plus_two
+							&& s.cardInfo.type != CardType.ct_four_plus_two_double)
 					{
 						cardinfo = s.cardInfo;
 					}
@@ -334,8 +367,15 @@ public class Logic
 		else if (totalvalue == 0)
 		{
 			// 必输
+			boolean usemin = true;
+			if (r.no == 2)
+			{
+				usemin = false;
+			}
+
 			CardInfo cardinfo = null;
 			int min = 9999999;
+			int max = -9999999;
 			for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
 			{
 				MCTSNode s = e.getValue();
@@ -346,10 +386,21 @@ public class Logic
 					sum += c;
 				}
 
-				if (sum < min || (cardinfo != null && cardinfo.type == CardType.ct_pass))
+				if (usemin)
 				{
-					min = sum;
-					cardinfo = s.cardInfo;
+					if (sum < min || (cardinfo != null && cardinfo.type == CardType.ct_pass))
+					{
+						min = sum;
+						cardinfo = s.cardInfo;
+					}
+				}
+				else
+				{
+					if (sum > max || (cardinfo != null && cardinfo.type == CardType.ct_pass))
+					{
+						max = sum;
+						cardinfo = s.cardInfo;
+					}
 				}
 			}
 
@@ -496,387 +547,6 @@ public class Logic
 		return ret;
 	}
 
-	/*
-		public int MinMaxCard(int deps, Robot r, CardInfo lastbig, CardInfo ret)
-		{
-			if (IsEnd())
-			{
-				if (A.IsEnd())
-				{
-					return 9999999;
-				}
-				else
-				{
-					return -9999999;
-				}
-			}
-	
-			if (deps == 0)
-			{
-				return Eveluation();
-			}
-	
-			ArrayList<CardInfo> outlist;
-			if (lastbig.r == r)
-			{
-				outlist = FindFirstOutCard(r);
-			}
-			else
-			{
-				outlist = FindBigger(r, lastbig);
-			}
-	
-			int retvalue = 0;
-			if (r.no == 0)
-			{
-				retvalue = Integer.MIN_VALUE;
-			}
-			else
-			{
-				retvalue = Integer.MAX_VALUE;
-			}
-	
-			CardInfo last = null;
-			for (CardInfo c : outlist)
-			{
-				if (last != null && last.cardstr.equals(c.cardstr))
-				{
-					continue;
-				}
-				last = c;
-	
-				int oldsize = r.card.size();
-				r.RemoveCard(c);
-	
-				CardInfo newlastbig;
-				if (c.type == CardType.ct_pass)
-				{
-					newlastbig = (CardInfo) lastbig.clone();
-				}
-				else
-				{
-					newlastbig = (CardInfo) c.clone();
-				}
-	
-				Robot next = r.next;
-	
-				int value = MinMaxCard(deps - 1, next, newlastbig, null);
-	
-				r.AddCard(c);
-	
-				if (r.card.size() != oldsize)
-				{
-					System.out.println("aaa");
-				}
-	
-				if (r.no == 0)
-				{
-					if (value > retvalue)
-					{
-						retvalue = value;
-						if (ret != null)
-						{
-							ret.copyfrom(c);
-						}
-					}
-				}
-				else
-				{
-					if (value < retvalue)
-					{
-						retvalue = value;
-						if (ret != null)
-						{
-							ret.copyfrom(c);
-						}
-					}
-				}
-			}
-	
-			if (ret != null && ret.cardstr == null)
-			{
-				ret.copyfrom(new CardInfo(CardType.ct_pass, 0, r, new int[0], 0));
-			}
-	
-			return retvalue;
-		}
-	
-		public int AlphaBeta(int deps, Robot r, CardInfo lastbig, CardInfo ret, int alpha, int beta)
-		{
-			if (IsEnd())
-			{
-				if (A.IsEnd())
-				{
-					return 9999999;
-				}
-				else
-				{
-					return -9999999;
-				}
-			}
-	
-			if (deps == 0)
-			{
-				return Eveluation();
-			}
-	
-			ArrayList<CardInfo> outlist;
-			if (lastbig.r == r)
-			{
-				outlist = FindFirstOutCard(r);
-			}
-			else
-			{
-				outlist = FindBigger(r, lastbig);
-			}
-	
-			if (r.no == 0)
-			{
-				CardInfo last = null;
-				for (CardInfo c : outlist)
-				{
-					if (last != null && last.cardstr.equals(c.cardstr))
-					{
-						continue;
-					}
-					last = c;
-	
-					int oldsize = r.card.size();
-					r.RemoveCard(c);
-	
-					CardInfo newlastbig;
-					if (c.type == CardType.ct_pass)
-					{
-						newlastbig = (CardInfo) lastbig.clone();
-					}
-					else
-					{
-						newlastbig = (CardInfo) c.clone();
-					}
-	
-					Robot next = r.next;
-	
-					int value = AlphaBeta(deps - 1, next, newlastbig, null, alpha, beta);
-	
-					r.AddCard(c);
-	
-					if (r.card.size() != oldsize)
-					{
-						System.out.println("aaa");
-					}
-	
-					if (value > alpha)
-					{
-						alpha = value;
-						if (ret != null)
-						{
-							ret.copyfrom(c);
-						}
-					}
-					else if (value == alpha)
-					{
-						if (ret != null && ret.type == CardType.ct_pass)
-						{
-							ret.copyfrom(c);
-						}
-					}
-					if (value >= beta)
-					{
-						return beta;
-					}
-				}
-	
-				if (ret != null && ret.cardstr == null)
-				{
-					ret.copyfrom(new CardInfo(CardType.ct_pass, 0, r, new int[0], 0));
-				}
-	
-				return alpha;
-			}
-			else
-			{
-				CardInfo last = null;
-				for (CardInfo c : outlist)
-				{
-					if (last != null && last.cardstr.equals(c.cardstr))
-					{
-						continue;
-					}
-					last = c;
-	
-					int oldsize = r.card.size();
-					r.RemoveCard(c);
-	
-					CardInfo newlastbig;
-					if (c.type == CardType.ct_pass)
-					{
-						newlastbig = (CardInfo) lastbig.clone();
-					}
-					else
-					{
-						newlastbig = (CardInfo) c.clone();
-					}
-	
-					Robot next = r.next;
-	
-					int value = AlphaBeta(deps - 1, next, newlastbig, null, alpha, beta);
-	
-					r.AddCard(c);
-	
-					if (r.card.size() != oldsize)
-					{
-						System.out.println("aaa");
-					}
-	
-					//System.out.println("deps " + deps + " robot[" + r.no + "] try card " + c.cardstr + " value " + value);
-	
-					if (value < beta)
-					{
-						beta = value;
-						if (ret != null)
-						{
-							ret.copyfrom(c);
-						}
-					}
-					else if (value == beta)
-					{
-						if (ret != null && ret.type == CardType.ct_pass)
-						{
-							ret.copyfrom(c);
-						}
-					}
-					if (alpha >= value)
-					{
-						return alpha;
-					}
-				}
-	
-				if (ret != null && ret.cardstr == null)
-				{
-					ret.copyfrom(new CardInfo(CardType.ct_pass, 0, r, new int[0], 0));
-				}
-	
-				return beta;
-			}
-		}
-	
-		public int Eveluation()
-		{
-			int a = EveluationCard(A);
-			int b = EveluationCard(B);
-			int c = EveluationCard(C);
-			return a - (b + c);
-		}
-	
-		public int EveluationNum(int num)
-		{
-			return (10 - num) * EveluationOne(5);
-		}
-	
-		public int EveluationOne(int card)
-		{
-			return card * card / 2;
-		}
-	
-		public int EveluationTwo(int card)
-		{
-			return card * EveluationOne(3);
-		}
-	
-		public int EveluationThree(int card)
-		{
-			return card * EveluationTwo(5);
-		}
-	
-		public int EveluationFour(int card)
-		{
-			return card * EveluationThree(14);
-		}
-	
-		public int EveluationContinue(int card, int num)
-		{
-			return num * EveluationOne(card);
-		}
-	
-		public int EveluationCard(Robot r)
-		{
-			HashMap<Integer, Integer> tmp = new HashMap<Integer, Integer>();
-			for (Integer c : r.card)
-			{
-				if (tmp.get(c) == null)
-				{
-					tmp.put(c, 1);
-				}
-				else
-				{
-					tmp.put(c, tmp.get(c) + 1);
-				}
-			}
-	
-			int ret = 0;
-			for (Map.Entry<Integer, Integer> e : tmp.entrySet())
-			{
-				int card = e.getKey().intValue();
-				int num = e.getValue().intValue();
-				if (num == 1)
-				{
-					ret += EveluationOne(card);
-				}
-				if (num == 2)
-				{
-					ret += EveluationTwo(card);
-				}
-				if (num == 3)
-				{
-					ret += EveluationThree(card);
-				}
-				if (num == 4)
-				{
-					ret += EveluationFour(card);
-				}
-			}
-	
-			for (int i = 0; i < r.card.size() - 3; i++)
-			{
-				int cur = r.card.get(i);
-				int next = r.card.get(i + 1);
-	
-				if (cur == 14 && next == 15)
-				{
-					ret += EveluationFour(15);
-					break;
-				}
-			}
-	
-			int num = 0;
-			for (int i = 0; i < r.card.size() - 1; i++)
-			{
-				int cur = r.card.get(i);
-				int next = r.card.get(i + 1);
-				if (cur + 1 == next)
-				{
-					num++;
-				}
-				else
-				{
-					if (num >= 5)
-					{
-						ret += EveluationContinue(cur, num);
-					}
-					num = 0;
-				}
-			}
-			if (num >= 5)
-			{
-				ret += EveluationContinue(r.card.get(r.card.size() - 1), num);
-				num = 0;
-			}
-	
-			ret += EveluationNum(r.card.size());
-	
-			return ret;
-		}
-	*/
 	public ArrayList<CardInfo> FindBigger(Robot r, CardInfo lastbig)
 	{
 		ArrayList<CardInfo> ret = new ArrayList<CardInfo>();
@@ -995,7 +665,7 @@ public class Logic
 					r.cardmap[i + j] -= 3;
 				}
 
-				ret = ChooseDoubleThreePlusTwo(ret, r, lastbig, i, num, new int[0]);
+				ret = ChooseDoubleThreePlusTwo(ret, r, lastbig, i, num, new int[0], 1);
 
 				for (int j = 0; j < num; j++)
 				{
@@ -1008,7 +678,7 @@ public class Logic
 	}
 
 	private ArrayList<CardInfo> ChooseDoubleThreePlusTwo(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig, int starti,
-			int deps, int[] card)
+			int deps, int[] card, int loopstart)
 	{
 		if (deps == 0)
 		{
@@ -1026,10 +696,23 @@ public class Logic
 			return ret;
 		}
 
-		for (int i = 1; i <= 12; i++)
+		int mindobule = 999;
+		for (int i = loopstart; i <= 12; i++)
 		{
 			if (r.cardmap[i] > 1)
 			{
+				if (IsSimpleDouble(r, i))
+				{
+					if (i < mindobule)
+					{
+						mindobule = i;
+					}
+					else
+					{
+						continue;
+					}
+				}
+
 				int[] mycard = new int[card.length + 2];
 				mycard = AppendCard(mycard, 0, card);
 				mycard[card.length] = i;
@@ -1037,7 +720,7 @@ public class Logic
 
 				r.cardmap[i] -= 2;
 
-				ret = ChooseDoubleThreePlusTwo(ret, r, lastbig, starti, deps - 1, mycard);
+				ret = ChooseDoubleThreePlusTwo(ret, r, lastbig, starti, deps - 1, mycard, i);
 
 				r.cardmap[i] += 2;
 			}
@@ -1071,7 +754,7 @@ public class Logic
 					r.cardmap[i + j] -= 3;
 				}
 
-				ret = ChooseDoubleThreePlusOne(ret, r, lastbig, i, num, new int[0]);
+				ret = ChooseDoubleThreePlusOne(ret, r, lastbig, i, num, new int[0], i);
 
 				for (int j = 0; j < num; j++)
 				{
@@ -1084,7 +767,7 @@ public class Logic
 	}
 
 	public ArrayList<CardInfo> ChooseDoubleThreePlusOne(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig, int starti,
-			int deps, int[] card)
+			int deps, int[] card, int loopstart)
 	{
 		if (deps == 0)
 		{
@@ -1102,17 +785,30 @@ public class Logic
 			return ret;
 		}
 
-		for (int i = 1; i <= 15; i++)
+		int minsingle = 999;
+		for (int i = loopstart; i <= 15; i++)
 		{
 			if (r.cardmap[i] > 0)
 			{
+				if (IsSimpleSingle(r, i))
+				{
+					if (i < minsingle)
+					{
+						minsingle = i;
+					}
+					else
+					{
+						continue;
+					}
+				}
+
 				int[] mycard = new int[card.length + 1];
 				mycard = AppendCard(mycard, 0, card);
 				mycard[card.length] = i;
 
 				r.cardmap[i]--;
 
-				ret = ChooseDoubleThreePlusOne(ret, r, lastbig, starti, deps - 1, mycard);
+				ret = ChooseDoubleThreePlusOne(ret, r, lastbig, starti, deps - 1, mycard, i);
 
 				r.cardmap[i]++;
 			}
@@ -1229,14 +925,40 @@ public class Logic
 			if (r.cardmap[i] > 3)
 			{
 				// 随机选2个
+				int mindouble = 999;
 				for (int j = 1; j <= 13; j++)
 				{
 					if (i != j && r.cardmap[j] > 1)
 					{
+						if (IsSimpleDouble(r, j))
+						{
+							if (j < mindouble)
+							{
+								mindouble = j;
+							}
+							else
+							{
+								continue;
+							}
+						}
+
+						int mindoubleex = 999;
 						for (int k = j + 1; k <= 13; k++)
 						{
 							if (i != k && r.cardmap[k] > 1)
 							{
+								if (IsSimpleDouble(r, k))
+								{
+									if (k < mindoubleex)
+									{
+										mindoubleex = k;
+									}
+									else
+									{
+										continue;
+									}
+								}
+
 								int[] cardstr = new int[lastbig.cardnum];
 								cardstr[0] = i;
 								cardstr[1] = i;
@@ -1264,10 +986,23 @@ public class Logic
 			if (r.cardmap[i] > 3)
 			{
 				// 随机选2个
+				int mindouble = 999;
 				for (int j = 1; j <= 13; j++)
 				{
 					if (i != j && r.cardmap[j] > 1)
 					{
+						if (IsSimpleDouble(r, j))
+						{
+							if (j < mindouble)
+							{
+								mindouble = j;
+							}
+							else
+							{
+								continue;
+							}
+						}
+
 						int[] cardstr = new int[lastbig.cardnum];
 						cardstr[0] = i;
 						cardstr[1] = i;
@@ -1280,14 +1015,40 @@ public class Logic
 					}
 				}
 
+				int minsingle = 999;
 				for (int j = 1; j <= 15; j++)
 				{
 					if (i != j && r.cardmap[j] > 0)
 					{
+						if (IsSimpleSingle(r, j))
+						{
+							if (j < minsingle)
+							{
+								minsingle = j;
+							}
+							else
+							{
+								continue;
+							}
+						}
+
+						int minsingleex = 999;
 						for (int k = j + 1; k <= 15; k++)
 						{
 							if (i != k && r.cardmap[k] > 0)
 							{
+								if (IsSimpleSingle(r, k))
+								{
+									if (k < minsingleex)
+									{
+										minsingleex = k;
+									}
+									else
+									{
+										continue;
+									}
+								}
+
 								int[] cardstr = new int[lastbig.cardnum];
 								cardstr[0] = i;
 								cardstr[1] = i;
@@ -1306,6 +1067,58 @@ public class Logic
 		return ret;
 	}
 
+	public boolean IsSimpleSingle(Robot r, int i)
+	{
+		if (r.cardmap[i] != 1)
+		{
+			return false;
+		}
+
+		if (i >= 5)
+		{
+			if (r.cardmap[i - 4] > 0 && r.cardmap[i - 3] > 0 && r.cardmap[i - 2] > 0 && r.cardmap[i - 1] > 0)
+			{
+				return false;
+			}
+		}
+
+		if (i <= 8)
+		{
+			if (r.cardmap[i + 4] > 0 && r.cardmap[i + 3] > 0 && r.cardmap[i + 2] > 0 && r.cardmap[i + 1] > 0)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	public boolean IsSimpleDouble(Robot r, int i)
+	{
+		if (r.cardmap[i] != 2)
+		{
+			return false;
+		}
+
+		if (i >= 3)
+		{
+			if (r.cardmap[i - 2] > 1 && r.cardmap[i - 1] > 1)
+			{
+				return false;
+			}
+		}
+
+		if (i <= 11)
+		{
+			if (r.cardmap[i + 2] > 1 && r.cardmap[i + 1] > 1)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	public ArrayList<CardInfo> FindBiggerThreePlusTwo(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
 		for (int i = lastbig.max + 1; i <= 13; i++)
@@ -1313,10 +1126,23 @@ public class Logic
 			if (r.cardmap[i] > 2)
 			{
 				// 随机选个
+				int mindouble = 999;
 				for (int j = 1; j <= 13; j++)
 				{
 					if (i != j && r.cardmap[j] > 1)
 					{
+						if (IsSimpleDouble(r, j))
+						{
+							if (j < mindouble)
+							{
+								mindouble = j;
+							}
+							else
+							{
+								continue;
+							}
+						}
+
 						int[] cardstr = new int[lastbig.cardnum];
 						cardstr[0] = i;
 						cardstr[1] = i;
@@ -1339,10 +1165,23 @@ public class Logic
 			if (r.cardmap[i] > 2)
 			{
 				// 随机选个
+				int minsingle = 999;
 				for (int j = 1; j <= 15; j++)
 				{
 					if (i != j && r.cardmap[j] > 0)
 					{
+						if (IsSimpleSingle(r, j))
+						{
+							if (j < minsingle)
+							{
+								minsingle = j;
+							}
+							else
+							{
+								continue;
+							}
+						}
+
 						int[] cardstr = new int[lastbig.cardnum];
 						cardstr[0] = i;
 						cardstr[1] = i;
