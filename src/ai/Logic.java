@@ -39,7 +39,7 @@ public class Logic
 		CardInfo lastbig = null;
 		Robot cur = null;
 
-		boolean test = false;
+		boolean test = true;
 		if (!test)
 		{
 			lastbig = new CardInfo(CardType.ct_pass, 0, A, new int[0], 0);
@@ -47,7 +47,7 @@ public class Logic
 		}
 		else
 		{
-			cur = A;
+			cur = C;
 
 			boolean first = true;
 			if (first)
@@ -111,12 +111,12 @@ public class Logic
 
 	public void Dispatch()
 	{
-		boolean test = false;
+		boolean test = true;
 		if (test)
 		{
-			String a = "3,3,3,4,4,4,5,6,6,7,7,J,J,J,J,K,A,A";
-			String b = "4,Q,Q,K,2";
-			String c = "3,4,5,5,5,6,6,7,9,9,9,10,K,A";
+			String a = "8,9,Q,K,K,2,2";
+			String b = "3,5,J,K,A,2";
+			String c = "3,4,5,5,8,8,9,J,J,K,小王,大王";
 
 			for (String s : a.split("\\,"))
 			{
@@ -1229,10 +1229,73 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerSingle(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
+		boolean havethree = false;
+		for (int i = 1; i <= 15; i++)
+		{
+			if (r.cardmap[i] >= 3)
+			{
+				havethree = true;
+				break;
+			}
+		}
+
+		int max = 0;
+		if (!havethree)
+		{
+			if (r.no == 0)
+			{
+				for (int i = 1; i <= 15; i++)
+				{
+					if (B.cardmap[i] > 0)
+					{
+						if (i > max)
+						{
+							max = i;
+						}
+					}
+				}
+
+				for (int i = 1; i <= 15; i++)
+				{
+					if (C.cardmap[i] > 0)
+					{
+						if (i > max)
+						{
+							max = i;
+						}
+					}
+				}
+			}
+			else
+			{
+				for (int i = 1; i <= 15; i++)
+				{
+					if (A.cardmap[i] > 0)
+					{
+						if (i > max)
+						{
+							max = i;
+						}
+					}
+				}
+			}
+		}
+
+		int simplesigle = 0;
 		for (int i = lastbig.max + 1; i <= 15; i++)
 		{
 			if (r.cardmap[i] > 0)
 			{
+				if (!havethree && IsSimpleSingle(r, i))
+				{
+					if (simplesigle >= 2 && i > max)
+					{
+						continue;
+					}
+
+					simplesigle++;
+				}
+
 				int[] cardstr = new int[lastbig.cardnum];
 				cardstr[0] = i;
 				ret.add(new CardInfo(CardType.ct_single, i, r, cardstr, lastbig.cardnum));
