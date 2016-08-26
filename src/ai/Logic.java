@@ -1229,79 +1229,95 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerSingle(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
-		boolean havethree = false;
-		for (int i = 1; i <= 15; i++)
+		if (lastbig.max == 0)
 		{
-			if (r.cardmap[i] >= 3)
+			boolean havethree = false;
+			for (int i = 1; i <= 15; i++)
 			{
-				havethree = true;
-				break;
-			}
-		}
-
-		int max = 0;
-		if (!havethree)
-		{
-			if (r.no == 0)
-			{
-				for (int i = 1; i <= 15; i++)
+				if (r.cardmap[i] >= 3)
 				{
-					if (B.cardmap[i] > 0)
+					havethree = true;
+					break;
+				}
+			}
+
+			int max = 0;
+			if (!havethree)
+			{
+				if (r.no == 0)
+				{
+					for (int i = 1; i <= 15; i++)
 					{
-						if (i > max)
+						if (B.cardmap[i] > 0)
 						{
-							max = i;
+							if (i > max)
+							{
+								max = i;
+							}
+						}
+					}
+
+					for (int i = 1; i <= 15; i++)
+					{
+						if (C.cardmap[i] > 0)
+						{
+							if (i > max)
+							{
+								max = i;
+							}
 						}
 					}
 				}
-
-				for (int i = 1; i <= 15; i++)
+				else
 				{
-					if (C.cardmap[i] > 0)
+					for (int i = 1; i <= 15; i++)
 					{
-						if (i > max)
+						if (A.cardmap[i] > 0)
 						{
-							max = i;
+							if (i > max)
+							{
+								max = i;
+							}
 						}
 					}
 				}
 			}
-			else
+
+			int simplesigle = 0;
+			for (int i = lastbig.max + 1; i <= 15; i++)
 			{
-				for (int i = 1; i <= 15; i++)
+				if (r.cardmap[i] > 0)
 				{
-					if (A.cardmap[i] > 0)
+					if (!havethree && IsSimpleSingle(r, i))
 					{
-						if (i > max)
+						if (simplesigle >= 2 && i > max)
 						{
-							max = i;
+							continue;
 						}
+
+						simplesigle++;
 					}
+
+					int[] cardstr = new int[lastbig.cardnum];
+					cardstr[0] = i;
+					ret.add(new CardInfo(CardType.ct_single, i, r, cardstr, lastbig.cardnum));
 				}
 			}
+			return ret;
 		}
-
-		int simplesigle = 0;
-		for (int i = lastbig.max + 1; i <= 15; i++)
+		else
 		{
-			if (r.cardmap[i] > 0)
+			for (int i = lastbig.max + 1; i <= 15; i++)
 			{
-				if (!havethree && IsSimpleSingle(r, i))
+				if (r.cardmap[i] > 0)
 				{
-					if (simplesigle >= 2 && i > max)
-					{
-						continue;
-					}
-
-					simplesigle++;
+					int[] cardstr = new int[lastbig.cardnum];
+					cardstr[0] = i;
+					ret.add(new CardInfo(CardType.ct_single, i, r, cardstr, lastbig.cardnum));
 				}
-
-				int[] cardstr = new int[lastbig.cardnum];
-				cardstr[0] = i;
-				ret.add(new CardInfo(CardType.ct_single, i, r, cardstr, lastbig.cardnum));
 			}
+			return ret;
 		}
-		return ret;
 	}
 
 	public ArrayList<CardInfo> FindBiggerBoom(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
