@@ -13,6 +13,7 @@ public class Logic
 	public Robot B;
 	public Robot C;
 	Random rand = new Random();
+	boolean isin;
 
 	public static int[] Card =
 	{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
@@ -47,7 +48,7 @@ public class Logic
 		}
 		else
 		{
-			cur = A;
+			cur = B;
 
 			boolean first = true;
 			if (first)
@@ -114,9 +115,9 @@ public class Logic
 		boolean test = false;
 		if (test)
 		{
-			String a = "3,3,5,5,5,6,6,6,7,7,7,9,J,Q,K,A,A,2,2,大王";
-			String b = "4,4,4,5,6,8,8,9,9,10,10,10,J,Q,K,2";
-			String c = "3,3,4,7,8,8,9,10,J,J,Q,Q,K,K,A,A,2";
+			String a = "9,2,2";
+			String b = "3,5,6,6,8,8,9,10,J,J,K";
+			String c = "6,7,8,J,Q,K,A,A,A";
 
 			for (String s : a.split("\\,"))
 			{
@@ -305,135 +306,162 @@ public class Logic
 		if (totalvalue >= totalN)
 		{
 			// 必赢
-			for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
-			{
-				MCTSNode s = e.getValue();
-				if (s.cardInfo.cardnum >= r.cardnum && s.cardInfo.type != CardType.ct_four_plus_two
-						&& s.cardInfo.type != CardType.ct_four_plus_two_double)
-				{
-					return s.cardInfo;
-				}
-			}
-
-			int minmax = 999999;
-			CardInfo cardinfo = null;
-			for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
-			{
-				MCTSNode s = e.getValue();
-				if (s.cardInfo.max < minmax && r.cardmap[s.cardInfo.max] != 4
-						&& !(have_double_king(r) && s.cardInfo.max == 14 || s.cardInfo.max == 15))
-				{
-					cardinfo = s.cardInfo;
-					minmax = s.cardInfo.max;
-				}
-			}
-
-			for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
-			{
-				MCTSNode s = e.getValue();
-
-				if (cardinfo == null)
-				{
-					cardinfo = s.cardInfo;
-				}
-				else
-				{
-					if (cardinfo.type == CardType.ct_pass)
-					{
-						cardinfo = s.cardInfo;
-					}
-					else if (cardinfo.type == CardType.ct_double_king && cardinfo.max != 14 && cardinfo.max != 15)
-					{
-						cardinfo = s.cardInfo;
-					}
-					else if (s.cardInfo.max == cardinfo.max && s.cardInfo.cardnum > cardinfo.cardnum
-							&& s.cardInfo.type != CardType.ct_four_plus_two
-							&& s.cardInfo.type != CardType.ct_four_plus_two_double)
-					{
-						cardinfo = s.cardInfo;
-					}
-					else if (s.cardInfo.type == cardinfo.type && r.cardmap[s.cardInfo.max] != 4)
-					{
-						if (MCTSCompare(s.cardInfo, cardinfo))
-						{
-							cardinfo = s.cardInfo;
-						}
-					}
-				}
-			}
-
-			return cardinfo;
+			return MCTSSelectByWin(r, node, lastbig);
 		}
 		else if (totalvalue == 0)
 		{
 			// 必输
-			boolean usemin = true;
-			if (r.no == 2)
-			{
-				usemin = false;
-			}
-
-			CardInfo cardinfo = null;
-			int min = 9999999;
-			int max = -9999999;
-			for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
-			{
-				MCTSNode s = e.getValue();
-
-				int sum = 0;
-				for (int c : s.cardInfo.cardstr)
-				{
-					sum += c;
-				}
-
-				if (usemin)
-				{
-					if (sum < min || (cardinfo != null && cardinfo.type == CardType.ct_pass))
-					{
-						min = sum;
-						cardinfo = s.cardInfo;
-					}
-				}
-				else
-				{
-					if (sum > max || (cardinfo != null && cardinfo.type == CardType.ct_pass))
-					{
-						max = sum;
-						cardinfo = s.cardInfo;
-					}
-				}
-			}
-
-			return cardinfo;
+			return MCTSSelectByLose(r, node, lastbig);
 		}
 		else
 		{
 			// 同value的权重计算，选个价值最低的打出去
-			CardInfo cardinfo = null;
-			int max = -9999999;
-			for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
-			{
-				MCTSNode s = e.getValue();
-				// value正负1/100认为是一样的
-				if (s.Value >= max - max / 100 && s.Value <= max + max / 100)
-				{
-					max = Math.max(s.Value, max);
+			return MCTSSelect(r, node, lastbig);
+		}
+	}
 
-					// 选价值最低的打出去
+	public CardInfo MCTSSelect(Robot r, MCTSNode node, CardInfo lastbig)
+	{
+		CardInfo cardinfo = null;
+		int max = -9999999;
+		for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
+		{
+			MCTSNode s = e.getValue();
+			// value正负1/100认为是一样的
+			if (s.Value >= max - max / 100 && s.Value <= max + max / 100)
+			{
+				max = Math.max(s.Value, max);
+
+				// 选价值最低的打出去
+				if (MCTSCompare(s.cardInfo, cardinfo))
+				{
+					cardinfo = s.cardInfo;
+				}
+			}
+			else if (s.Value > max)
+			{
+				max = s.Value;
+				cardinfo = s.cardInfo;
+			}
+		}
+
+		return cardinfo;
+	}
+
+	public CardInfo MCTSSelectByLose(Robot r, MCTSNode node, CardInfo lastbig)
+	{
+		boolean usemin = true;
+		if (r.no == 2)
+		{
+			usemin = false;
+		}
+
+		CardInfo cardinfo = null;
+		int min = 9999999;
+		int max = -9999999;
+		for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
+		{
+			MCTSNode s = e.getValue();
+
+			int sum = 0;
+			for (int c : s.cardInfo.cardstr)
+			{
+				sum += c;
+			}
+
+			if (usemin)
+			{
+				if (sum < min || (cardinfo != null && cardinfo.type == CardType.ct_pass))
+				{
+					min = sum;
+					cardinfo = s.cardInfo;
+				}
+			}
+			else
+			{
+				if (sum > max || (cardinfo != null && cardinfo.type == CardType.ct_pass))
+				{
+					max = sum;
+					cardinfo = s.cardInfo;
+				}
+			}
+		}
+
+		return cardinfo;
+	}
+
+	public CardInfo MCTSSelectByWin(Robot r, MCTSNode node, CardInfo lastbig)
+	{
+		for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
+		{
+			MCTSNode s = e.getValue();
+			if (s.cardInfo.cardnum >= r.cardnum && s.cardInfo.type != CardType.ct_four_plus_two
+					&& s.cardInfo.type != CardType.ct_four_plus_two_double)
+			{
+				return s.cardInfo;
+			}
+		}
+
+		for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
+		{
+			MCTSNode s = e.getValue();
+			if (s.cardInfo.type != CardType.ct_four_plus_two && s.cardInfo.type != CardType.ct_four_plus_two_double)
+			{
+				if (IsLastTwoOut(r, s.cardInfo))
+				{
+					return s.cardInfo;
+				}
+			}
+		}
+
+		int minmax = 999999;
+		CardInfo cardinfo = null;
+		for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
+		{
+			MCTSNode s = e.getValue();
+			if (s.cardInfo.max < minmax && r.cardmap[s.cardInfo.max] != 4
+					&& !(have_double_king(r) && s.cardInfo.max == 14 || s.cardInfo.max == 15))
+			{
+				cardinfo = s.cardInfo;
+				minmax = s.cardInfo.max;
+			}
+		}
+
+		for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
+		{
+			MCTSNode s = e.getValue();
+
+			if (cardinfo == null)
+			{
+				cardinfo = s.cardInfo;
+			}
+			else
+			{
+				if (cardinfo.type == CardType.ct_pass)
+				{
+					cardinfo = s.cardInfo;
+				}
+				else if (cardinfo.type == CardType.ct_double_king && cardinfo.max != 14 && cardinfo.max != 15)
+				{
+					cardinfo = s.cardInfo;
+				}
+				else if (s.cardInfo.max == cardinfo.max && s.cardInfo.cardnum > cardinfo.cardnum
+						&& s.cardInfo.type != CardType.ct_four_plus_two
+						&& s.cardInfo.type != CardType.ct_four_plus_two_double)
+				{
+					cardinfo = s.cardInfo;
+				}
+				else if (s.cardInfo.type == cardinfo.type && r.cardmap[s.cardInfo.max] != 4)
+				{
 					if (MCTSCompare(s.cardInfo, cardinfo))
 					{
 						cardinfo = s.cardInfo;
 					}
 				}
-				else if (s.Value > max)
-				{
-					max = s.Value;
-					cardinfo = s.cardInfo;
-				}
 			}
-
-			return cardinfo;
 		}
+
+		return cardinfo;
 	}
 
 	public int MCTSCal(Robot r, MCTSNode node, CardInfo lastbig)
@@ -1214,94 +1242,14 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerDouble(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
-		if (lastbig.max == 0)
+		for (int i = lastbig.max + 1; i <= 13; i++)
 		{
-			boolean havethree = false;
-			for (int i = 1; i <= 15; i++)
+			if (r.cardmap[i] > 1)
 			{
-				if (r.cardmap[i] >= 3)
-				{
-					havethree = true;
-					break;
-				}
-			}
-
-			int max = 0;
-			if (!havethree)
-			{
-				if (r.no == 0)
-				{
-					for (int i = 1; i <= 15; i++)
-					{
-						if (B.cardmap[i] > 1)
-						{
-							if (i > max)
-							{
-								max = i;
-							}
-						}
-					}
-
-					for (int i = 1; i <= 15; i++)
-					{
-						if (C.cardmap[i] > 1)
-						{
-							if (i > max)
-							{
-								max = i;
-							}
-						}
-					}
-				}
-				else
-				{
-					for (int i = 1; i <= 15; i++)
-					{
-						if (A.cardmap[i] > 1)
-						{
-							if (i > max)
-							{
-								max = i;
-							}
-						}
-					}
-				}
-			}
-
-			int simpledouble = 0;
-			for (int i = lastbig.max + 1; i <= 13; i++)
-			{
-				if (r.cardmap[i] > 1)
-				{
-					if (!havethree && IsSimpleDouble(r, i))
-					{
-						if (simpledouble >= 2 && i > max)
-						{
-							continue;
-						}
-
-						simpledouble++;
-					}
-
-					int[] cardstr = new int[lastbig.cardnum];
-					cardstr[0] = i;
-					cardstr[1] = i;
-					ret.add(new CardInfo(CardType.ct_double, i, r, cardstr, lastbig.cardnum));
-				}
-			}
-			return ret;
-		}
-		else
-		{
-			for (int i = lastbig.max + 1; i <= 13; i++)
-			{
-				if (r.cardmap[i] > 1)
-				{
-					int[] cardstr = new int[lastbig.cardnum];
-					cardstr[0] = i;
-					cardstr[1] = i;
-					ret.add(new CardInfo(CardType.ct_double, i, r, cardstr, lastbig.cardnum));
-				}
+				int[] cardstr = new int[lastbig.cardnum];
+				cardstr[0] = i;
+				cardstr[1] = i;
+				ret.add(new CardInfo(CardType.ct_double, i, r, cardstr, lastbig.cardnum));
 			}
 		}
 		return ret;
@@ -1309,95 +1257,16 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerSingle(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
-		if (lastbig.max == 0)
+		for (int i = lastbig.max + 1; i <= 15; i++)
 		{
-			boolean havethree = false;
-			for (int i = 1; i <= 15; i++)
+			if (r.cardmap[i] > 0)
 			{
-				if (r.cardmap[i] >= 3)
-				{
-					havethree = true;
-					break;
-				}
+				int[] cardstr = new int[lastbig.cardnum];
+				cardstr[0] = i;
+				ret.add(new CardInfo(CardType.ct_single, i, r, cardstr, lastbig.cardnum));
 			}
-
-			int max = 0;
-			if (!havethree)
-			{
-				if (r.no == 0)
-				{
-					for (int i = 1; i <= 15; i++)
-					{
-						if (B.cardmap[i] > 0)
-						{
-							if (i > max)
-							{
-								max = i;
-							}
-						}
-					}
-
-					for (int i = 1; i <= 15; i++)
-					{
-						if (C.cardmap[i] > 0)
-						{
-							if (i > max)
-							{
-								max = i;
-							}
-						}
-					}
-				}
-				else
-				{
-					for (int i = 1; i <= 15; i++)
-					{
-						if (A.cardmap[i] > 0)
-						{
-							if (i > max)
-							{
-								max = i;
-							}
-						}
-					}
-				}
-			}
-
-			int simplesigle = 0;
-			for (int i = lastbig.max + 1; i <= 15; i++)
-			{
-				if (r.cardmap[i] > 0)
-				{
-					if (!havethree && IsSimpleSingle(r, i))
-					{
-						if (simplesigle >= 2 && i > max)
-						{
-							continue;
-						}
-
-						simplesigle++;
-					}
-
-					int[] cardstr = new int[lastbig.cardnum];
-					cardstr[0] = i;
-					ret.add(new CardInfo(CardType.ct_single, i, r, cardstr, lastbig.cardnum));
-				}
-			}
-			return ret;
 		}
-		else
-		{
-			for (int i = lastbig.max + 1; i <= 15; i++)
-			{
-				if (r.cardmap[i] > 0)
-				{
-					int[] cardstr = new int[lastbig.cardnum];
-					cardstr[0] = i;
-					ret.add(new CardInfo(CardType.ct_single, i, r, cardstr, lastbig.cardnum));
-				}
-			}
-			return ret;
-		}
+		return ret;
 	}
 
 	public ArrayList<CardInfo> FindBiggerBoom(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
@@ -1547,5 +1416,31 @@ public class Logic
 			return true;
 		}
 		return false;
+	}
+
+	public boolean IsLastTwoOut(Robot r, CardInfo c)
+	{
+		r.RemoveCard(c);
+
+		ArrayList<CardInfo> ret = FindBigger(r.next, c);
+		if (ret.size() != 1)
+		{
+			return false;
+		}
+		ret = FindBigger(r.next.next, c);
+		if (ret.size() != 1)
+		{
+			return false;
+		}
+
+		ret = FindFirstOutCard(r);
+		if (ret.size() != 1)
+		{
+			return false;
+		}
+
+		r.AddCard(c);
+
+		return true;
 	}
 }
