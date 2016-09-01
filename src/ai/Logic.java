@@ -40,7 +40,7 @@ public class Logic
 		CardInfo lastbig = null;
 		Robot cur = null;
 
-		boolean test = false;
+		boolean test = true;
 		if (!test)
 		{
 			lastbig = new CardInfo(CardType.ct_pass, 0, A, new int[0], 0);
@@ -50,21 +50,16 @@ public class Logic
 		{
 			cur = B;
 
-			boolean first = true;
+			boolean first = false;
 			if (first)
 			{
 				lastbig = new CardInfo(CardType.ct_pass, 0, cur, new int[0], 0);
 			}
 			else
 			{
-				lastbig = new CardInfo(CardType.ct_pass, 0, C, new int[0], 0);
+				lastbig = new CardInfo(CardType.ct_double_king, 15, A, new int[]
+				{ 14, 15 }, 2);
 
-				lastbig.type = CardType.ct_three_plus_one;
-				lastbig.r = C;
-				lastbig.max = GetCardFromName("3");
-				lastbig.cardnum = 4;
-				lastbig.cardstr = new int[]
-				{ GetCardFromName("3"), GetCardFromName("3"), GetCardFromName("3"), GetCardFromName("4") };
 			}
 		}
 
@@ -112,12 +107,12 @@ public class Logic
 
 	public void Dispatch()
 	{
-		boolean test = false;
+		boolean test = true;
 		if (test)
 		{
-			String a = "9,2,2";
-			String b = "3,5,6,6,8,8,9,10,J,J,K";
-			String c = "6,7,8,J,Q,K,A,A,A";
+			String a = "5,5";
+			String b = "4,4,5,7,7,7,7,9,9,10,10,J,A";
+			String c = "6,6,2";
 
 			for (String s : a.split("\\,"))
 			{
@@ -578,6 +573,12 @@ public class Logic
 	public ArrayList<CardInfo> FindBigger(Robot r, CardInfo lastbig)
 	{
 		ArrayList<CardInfo> ret = new ArrayList<CardInfo>();
+
+		if (lastbig.type == CardType.ct_double_king)
+		{
+			ret.add(new CardInfo(CardType.ct_pass, 0, r, new int[0], 0));
+			return ret;
+		}
 
 		if (lastbig.type == CardType.ct_single)
 		{
