@@ -2,6 +2,7 @@ package ai;
 
 import java.io.FileWriter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Random;
@@ -40,7 +41,7 @@ public class Logic
 		CardInfo lastbig = null;
 		Robot cur = null;
 
-		boolean test = true;
+		boolean test = false;
 		if (!test)
 		{
 			lastbig = new CardInfo(CardType.ct_pass, 0, A, new int[0], 0);
@@ -48,7 +49,7 @@ public class Logic
 		}
 		else
 		{
-			cur = B;
+			cur = C;
 
 			boolean first = false;
 			if (first)
@@ -57,8 +58,8 @@ public class Logic
 			}
 			else
 			{
-				lastbig = new CardInfo(CardType.ct_double_king, 15, A, new int[]
-				{ 14, 15 }, 2);
+				lastbig = new CardInfo(CardType.ct_single, GetCardFromName("8"), B, new int[]
+				{ GetCardFromName("8"), }, 1);
 
 			}
 		}
@@ -107,12 +108,12 @@ public class Logic
 
 	public void Dispatch()
 	{
-		boolean test = true;
+		boolean test = false;
 		if (test)
 		{
-			String a = "5,5";
-			String b = "4,4,5,7,7,7,7,9,9,10,10,J,A";
-			String c = "6,6,2";
+			String a = "3,8,2";
+			String b = "8,9,Q";
+			String c = "2";
 
 			for (String s : a.split("\\,"))
 			{
@@ -287,20 +288,21 @@ public class Logic
 		}
 
 		int totalvalue = 0;
-		int totalN = 0;
+		HashMap<CardInfo, MCTSNode> win = new HashMap<CardInfo, MCTSNode>();
 		for (Map.Entry<CardInfo, MCTSNode> e : node.son.entrySet())
 		{
 			MCTSNode s = e.getValue();
-			if (s.cardInfo.type != CardType.ct_pass)
+			totalvalue += s.Value;
+			if (s.Value >= s.N)
 			{
-				totalvalue += s.Value;
-				totalN += s.N;
+				win.put(e.getKey(), e.getValue());
 			}
 		}
 
-		if (totalvalue >= totalN)
+		if (!win.isEmpty())
 		{
 			// 必赢
+			node.son = win;
 			return MCTSSelectByWin(r, node, lastbig);
 		}
 		else if (totalvalue == 0)
@@ -671,8 +673,13 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerDoubleThreePlusTwo(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
+		if (r.cardnum < lastbig.cardnum)
+		{
+			return ret;
+		}
+
 		int num = lastbig.cardnum / 5;
-		for (int i = lastbig.max + 1; i <= 12 - num; i++)
+		for (int i = lastbig.max + 1; i <= 12 - num + 1; i++)
 		{
 			boolean find = true;
 			for (int j = 0; j < num; j++)
@@ -760,8 +767,13 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerDoubleThreePlusOne(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
+		if (r.cardnum < lastbig.cardnum)
+		{
+			return ret;
+		}
+
 		int num = lastbig.cardnum / 4;
-		for (int i = lastbig.max + 1; i <= 12 - num; i++)
+		for (int i = lastbig.max + 1; i <= 12 - num + 1; i++)
 		{
 			boolean find = true;
 			for (int j = 0; j < num; j++)
@@ -848,8 +860,13 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerDoubleThree(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
+		if (r.cardnum < lastbig.cardnum)
+		{
+			return ret;
+		}
+
 		int num = lastbig.cardnum / 3;
-		for (int i = lastbig.max + 1; i <= 12 - num; i++)
+		for (int i = lastbig.max + 1; i <= 12 - num + 1; i++)
 		{
 			boolean find = true;
 			for (int j = 0; j < num; j++)
@@ -883,8 +900,13 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerDoubleContinue(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
+		if (r.cardnum < lastbig.cardnum)
+		{
+			return ret;
+		}
+
 		int num = lastbig.cardnum / 2;
-		for (int i = lastbig.max + 1; i <= 12 - num; i++)
+		for (int i = lastbig.max + 1; i <= 12 - num + 1; i++)
 		{
 			boolean find = true;
 			for (int j = 0; j < num; j++)
@@ -917,7 +939,12 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerContinue(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
-		for (int i = lastbig.max + 1; i <= 12 - lastbig.cardnum; i++)
+		if (r.cardnum < lastbig.cardnum)
+		{
+			return ret;
+		}
+
+		for (int i = lastbig.max + 1; i <= 12 - lastbig.cardnum + 1; i++)
 		{
 			boolean find = true;
 			for (int j = 0; j < lastbig.cardnum; j++)
@@ -949,6 +976,11 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerFourPlusTwoDouble(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
+		if (r.cardnum < lastbig.cardnum)
+		{
+			return ret;
+		}
+
 		for (int i = lastbig.max + 1; i <= 13; i++)
 		{
 			if (r.cardmap[i] > 3)
@@ -1010,6 +1042,11 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerFourPlusTwo(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
+		if (r.cardnum < lastbig.cardnum)
+		{
+			return ret;
+		}
+
 		for (int i = lastbig.max + 1; i <= 13; i++)
 		{
 			if (r.cardmap[i] > 3)
@@ -1098,11 +1135,6 @@ public class Logic
 
 	public boolean IsSimpleSingle(Robot r, int i)
 	{
-		if (r.cardmap[i] != 1)
-		{
-			return false;
-		}
-
 		if (i >= 5)
 		{
 			if (r.cardmap[i - 4] > 0 && r.cardmap[i - 3] > 0 && r.cardmap[i - 2] > 0 && r.cardmap[i - 1] > 0)
@@ -1150,6 +1182,11 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerThreePlusTwo(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
+		if (r.cardnum < lastbig.cardnum)
+		{
+			return ret;
+		}
+
 		for (int i = lastbig.max + 1; i <= 13; i++)
 		{
 			if (r.cardmap[i] > 2)
@@ -1189,6 +1226,11 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerThreePlusOne(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
+		if (r.cardnum < lastbig.cardnum)
+		{
+			return ret;
+		}
+
 		for (int i = lastbig.max + 1; i <= 13; i++)
 		{
 			if (r.cardmap[i] > 2)
@@ -1227,6 +1269,11 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerThree(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
+		if (r.cardnum < lastbig.cardnum)
+		{
+			return ret;
+		}
+
 		for (int i = lastbig.max + 1; i <= 13; i++)
 		{
 			if (r.cardmap[i] > 2)
@@ -1243,6 +1290,11 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerDouble(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
+		if (r.cardnum < lastbig.cardnum)
+		{
+			return ret;
+		}
+
 		for (int i = lastbig.max + 1; i <= 13; i++)
 		{
 			if (r.cardmap[i] > 1)
@@ -1272,6 +1324,11 @@ public class Logic
 
 	public ArrayList<CardInfo> FindBiggerBoom(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig)
 	{
+		if (r.cardnum < 4)
+		{
+			return ret;
+		}
+
 		for (int i = lastbig.max + 1; i <= 12; i++)
 		{
 			if (r.cardmap[i] > 3)
@@ -1426,17 +1483,20 @@ public class Logic
 		ArrayList<CardInfo> ret = FindBigger(r.next, c);
 		if (ret.size() != 1)
 		{
+			r.AddCard(c);
 			return false;
 		}
 		ret = FindBigger(r.next.next, c);
 		if (ret.size() != 1)
 		{
+			r.AddCard(c);
 			return false;
 		}
 
 		ret = FindFirstOutCard(r);
 		if (ret.size() != 1)
 		{
+			r.AddCard(c);
 			return false;
 		}
 
