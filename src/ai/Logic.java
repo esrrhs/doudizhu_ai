@@ -661,7 +661,7 @@ public class Logic
 		return ret;
 	}
 
-	private int[] AppendCard(int[] src, int start, int[] add)
+	public int[] AppendCard(int[] src, int start, int[] add)
 	{
 		for (int k = 0; k < add.length; k++)
 		{
@@ -713,7 +713,7 @@ public class Logic
 		return ret;
 	}
 
-	private ArrayList<CardInfo> ChooseDoubleThreePlusTwo(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig, int starti,
+	public ArrayList<CardInfo> ChooseDoubleThreePlusTwo(ArrayList<CardInfo> ret, Robot r, CardInfo lastbig, int starti,
 			int deps, int[] card, int loopstart)
 	{
 		if (deps == 0)
@@ -1469,7 +1469,7 @@ public class Logic
 
 	public boolean is_need_boom(Robot r)
 	{
-		if (A.cardnum <= 5 || B.cardnum <= 5 || C.cardnum <= 5)
+		if (r.cardnum <= 5 || r.next.cardnum <= 5 || r.next.cardnum <= 5)
 		{
 			return true;
 		}
