@@ -182,7 +182,19 @@ public class Logic
 		MCTSNode root = new MCTSNode();
 		int N = 50000;
 		CardInfo ret = MCTS(N, r, root, lastbig);
-		boolean isdump = true;
+
+		boolean isshowson = false;
+		if (isshowson)
+		{
+			System.out.println();
+			for (Map.Entry<CardInfo, MCTSNode> e : root.son.entrySet())
+			{
+				MCTSNode s = e.getValue();
+				System.out.println("    son:{" + s.cardInfo.CardStr() + "} {" + s.Value + "} {" + s.N + "})");
+			}
+		}
+
+		boolean isdump = false;
 		if (isdump)
 		{
 			String dump = DumpMCTS(N, 0, root, 0, 2);
