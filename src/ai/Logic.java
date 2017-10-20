@@ -9,6 +9,9 @@ import java.util.Random;
 
 public class Logic
 {
+	static Random ra = new Random();
+	static double epsilon = 1e-6;
+
 	public Table t;
 	public Robot A;
 	public Robot B;
@@ -111,9 +114,9 @@ public class Logic
 		boolean test = false;
 		if (test)
 		{
-			String a = "3,8,2";
-			String b = "8,9,Q";
-			String c = "2";
+			String a = "3,3,4,5,6,6,7,7,8,8,9,J,Q,Q,Q,K,K,K,A,2";
+			String b = "4,5,5,6,8,9,10,10,J,J,J,Q,A,A,A,2,大王";
+			String c = "3,3,4,4,5,6,7,7,8,9,9,10,10,K,2,2,小王";
 
 			for (String s : a.split("\\,"))
 			{
@@ -574,7 +577,8 @@ public class Logic
 			{
 				return s;
 			}
-			value += (float) s.Value / s.N + c * (float) (Math.sqrt(2 * Math.log(node.N) / s.N));
+			value += (float) s.Value / (s.N + epsilon) + c * (float) (Math.sqrt(Math.log(node.N + 1) / (s.N + epsilon)))
+					+ ra.nextDouble() * epsilon;
 			if (value > max)
 			{
 				max = value;
