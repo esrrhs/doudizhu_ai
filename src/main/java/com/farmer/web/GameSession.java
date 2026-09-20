@@ -157,20 +157,20 @@ public class GameSession {
         int activeId = currentBidder;
         Hand myHand = initialHands[activeId];
 
-        // 采用思路二：采样 100 次底牌与对手分布，快速模拟推演地主胜率 (阈值 0.50)
-        BidEvaluator.BidResult result = BidEvaluator.evaluate(myHand, 100, 0.50, random);
+        // 采用思路二 + MCTS 深度推演：60 个底牌假想世界 x 80 次 MCTS 搜索迭代
+        BidEvaluator.BidResult result = BidEvaluator.evaluate(myHand, 60, 80, 0.50, random);
         lastBidThoughts.put(activeId, result);
 
         if (result.shouldCall()) {
             bidActions[activeId] = "叫地主";
-            addLog(String.format("🤖 玩家 P%d (AI) [底牌推演预估胜率 %.1f%%] 决定【叫地主】！",
-                    activeId, result.winRate() * 100));
+            addLog(String.format("🤖 玩家 P%d (AI) [MCTS推演胜率 %.1f%% | 硬牌力分 %d] 决定【叫地主】！",
+                    activeId, result.winRate() * 100, result.controlScore()));
             finalizeLandlord(activeId);
             return "叫地主";
         } else {
             bidActions[activeId] = "不叫";
-            addLog(String.format("🤖 玩家 P%d (AI) [底牌推演预估胜率 %.1f%%] 决定【不叫】。",
-                    activeId, result.winRate() * 100));
+            addLog(String.format("🤖 玩家 P%d (AI) [MCTS推演胜率 %.1f%% | 硬牌力分 %d] 决定【不叫】。",
+                    activeId, result.winRate() * 100, result.controlScore()));
             advanceBidder();
             return "不叫";
         }

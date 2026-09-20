@@ -517,17 +517,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 const decisionText = thought.shouldCall ? "👑 叫地主" : "🙅 不叫";
                 const decisionColor = thought.shouldCall ? "#f59e0b" : "#94a3b8";
                 const widthPercent = Math.min(100, Math.max(5, thought.winRate));
+                const controlScoreText = (thought.controlScore !== undefined) ? ` | 硬牌力分: <strong>${thought.controlScore}</strong>` : "";
+                const summaryHtml = thought.summary ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">📝 ${thought.summary}</div>` : "";
 
                 html += `<div class="thought-item">
                     <div class="thought-header">
-                        <strong>${pName} [叫牌评估]</strong>
+                        <strong>${pName} [深度叫牌推演]</strong>
                         <span>耗时: ${thought.timeMs} ms</span>
                     </div>
-                    <div style="margin-bottom: 4px;">底牌采样推演胜率: <strong>${thought.winRate}%</strong> (采样 ${thought.sims} 次)</div>
+                    <div style="margin-bottom: 4px;">底牌采样 MCTS 胜率: <strong>${thought.winRate}%</strong> (世界: ${thought.sims})${controlScoreText}</div>
                     <div class="progress-bar-bg" style="margin-bottom: 6px;">
                         <div class="progress-bar-fill" style="width: ${widthPercent}%;"></div>
                     </div>
-                    <div>决定: <strong style="color: ${decisionColor}; font-size: 13px;">${decisionText}</strong> (阈值 50.0%)</div>
+                    <div>决定: <strong style="color: ${decisionColor}; font-size: 13px;">${decisionText}</strong> (基准 50.0%)</div>
+                    ${summaryHtml}
                 </div>`;
             } else {
                 html += `<div class="thought-item">

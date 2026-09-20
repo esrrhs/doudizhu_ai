@@ -398,13 +398,15 @@ public class GameHttpServer {
         if (session.getStage() == GameSession.Stage.BIDDING) {
             for (Map.Entry<Integer, BidEvaluator.BidResult> e : session.getLastBidThoughts().entrySet()) {
                 BidEvaluator.BidResult res = e.getValue();
-                aiThoughtsDto.put("p" + e.getKey(), Map.of(
-                        "type", "bid",
-                        "shouldCall", res.shouldCall(),
-                        "winRate", Math.round(res.winRate() * 1000.0) / 10.0,
-                        "timeMs", res.durationMs(),
-                        "sims", res.totalSimulations()
-                ));
+                Map<String, Object> bidMap = new HashMap<>();
+                bidMap.put("type", "bid");
+                bidMap.put("shouldCall", res.shouldCall());
+                bidMap.put("winRate", Math.round(res.winRate() * 1000.0) / 10.0);
+                bidMap.put("timeMs", res.durationMs());
+                bidMap.put("sims", res.totalSimulations());
+                bidMap.put("controlScore", res.controlScore());
+                bidMap.put("summary", res.analysisSummary() != null ? res.analysisSummary() : "");
+                aiThoughtsDto.put("p" + e.getKey(), bidMap);
             }
         } else {
             // 出牌思考雷达
