@@ -87,21 +87,33 @@ body {
     overflow: hidden;
 }
 
-/* 牌桌区 */
+/* 牌桌外层与侧边思考面板区 */
 .table-container {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 16px 20px;
     background: radial-gradient(circle, #1e293b 0%, #0f172a 100%);
     overflow: hidden;
+    position: relative;
+}
+
+.table-outer-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    width: 100%;
+    max-width: 1380px;
+    height: 100%;
+    position: relative;
 }
 
 .poker-table {
-    width: 100%;
-    max-width: 980px;
-    height: 650px;
+    flex: 1;
+    max-width: 920px;
+    height: 640px;
     background: radial-gradient(ellipse at center, var(--table-felt) 0%, var(--table-green) 100%);
     border: 14px solid #78350f;
     box-shadow: 0 0 0 4px #b45309, inset 0 0 50px rgba(0, 0, 0, 0.7), 0 20px 40px rgba(0, 0, 0, 0.6);
@@ -110,7 +122,7 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 20px 30px;
+    padding: 20px 28px;
 }
 
 /* 上方两位 AI 玩家与中央底牌行 */
@@ -352,15 +364,17 @@ body {
     display: flex;
     justify-content: center;
     gap: 4px;
-    padding-bottom: 5px;
-    min-height: 90px;
+    padding-top: 30px;
+    padding-bottom: 8px;
+    min-height: 120px;
     max-width: 100%;
     overflow-x: auto;
+    overflow-y: visible;
 }
 
 .card {
-    width: 46px;
-    height: 72px;
+    width: 48px;
+    height: 76px;
     background: #ffffff;
     border-radius: 6px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
@@ -373,21 +387,24 @@ body {
     font-size: 15px;
     cursor: pointer;
     user-select: none;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
     border: 1px solid #cbd5e1;
     position: relative;
+    flex-shrink: 0;
 }
 
 .card:hover {
-    transform: translateY(-8px);
+    transform: translateY(-10px);
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+    z-index: 5;
 }
 
 .card.selected {
-    transform: translateY(-20px);
-    box-shadow: 0 12px 20px rgba(59, 130, 246, 0.6);
-    border-color: #3b82f6;
+    transform: translateY(-24px);
+    box-shadow: 0 14px 22px rgba(59, 130, 246, 0.7);
+    border-color: #2563eb;
     background: #eff6ff;
+    z-index: 10;
 }
 
 .card.red {
@@ -723,4 +740,139 @@ body {
     border-top: 1px solid #334155;
     display: flex;
     justify-content: flex-end;
+}
+
+/* 牌桌外侧 AI 思考气泡面板 (AI Thought Popovers) */
+.ai-thought-popover {
+    width: 220px;
+    background: rgba(15, 23, 42, 0.95);
+    border: 1.5px solid #3b82f6;
+    border-radius: 14px;
+    padding: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6), 0 0 15px rgba(59, 130, 246, 0.3);
+    backdrop-filter: blur(8px);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 20;
+    align-self: flex-start;
+    margin-top: 30px;
+}
+
+.ai-thought-popover.left-popover {
+    border-color: #06b6d4;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6), 0 0 15px rgba(6, 182, 212, 0.3);
+}
+
+.ai-thought-popover.right-popover {
+    border-color: #8b5cf6;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6), 0 0 15px rgba(139, 92, 246, 0.3);
+}
+
+.ai-thought-popover .popover-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #334155;
+    padding-bottom: 6px;
+}
+
+.ai-thought-popover .popover-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #e2e8f0;
+}
+
+.ai-thought-popover .popover-time {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.ai-thought-popover .popover-body {
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+/* 出牌胜率特效动画 */
+/* 胜率极高 (>= 75%)：金光闪烁、神采奕奕 */
+.anim-win-high {
+    animation: winHighPulse 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    box-shadow: 0 0 20px #f59e0b, 0 0 35px rgba(245, 158, 11, 0.7) !important;
+    border-color: #f59e0b !important;
+    transform: scale(1.08) !important;
+}
+
+@keyframes winHighPulse {
+    0% { transform: scale(0.6) rotate(-5deg); opacity: 0; }
+    50% { transform: scale(1.15) rotate(3deg); }
+    100% { transform: scale(1.08) rotate(0deg); opacity: 1; }
+}
+
+/* 胜率很低 (<= 30%)：灰暗颤抖、苦涩挣扎 */
+.anim-win-low {
+    animation: winLowShake 0.5s ease-in-out !important;
+    box-shadow: 0 0 12px rgba(148, 163, 184, 0.4) !important;
+    border-color: #64748b !important;
+    filter: brightness(0.9);
+}
+
+@keyframes winLowShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-4px) rotate(-2deg); }
+    40%, 80% { transform: translateX(4px) rotate(2deg); }
+}
+
+/* 轻量级 Tips 浮层提示 (Toast) */
+.toast-container {
+    position: fixed;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast-item {
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid #3b82f6;
+    color: #f8fafc;
+    padding: 10px 20px;
+    border-radius: 24px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5), 0 0 15px rgba(59, 130, 246, 0.4);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: toastSlideDown 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), toastFadeOut 0.3s ease 2.2s forwards;
+    pointer-events: auto;
+}
+
+.toast-item.info {
+    border-color: #06b6d4;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5), 0 0 15px rgba(6, 182, 212, 0.4);
+}
+
+.toast-item.warning {
+    border-color: #f59e0b;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5), 0 0 15px rgba(245, 158, 11, 0.4);
+}
+
+@keyframes toastSlideDown {
+    0% { transform: translateY(-30px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes toastFadeOut {
+    0% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-15px); }
 }

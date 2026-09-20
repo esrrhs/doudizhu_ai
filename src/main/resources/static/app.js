@@ -59,8 +59,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnQuickFarmer = document.getElementById("btn-quick-farmer");
     const btnRules = document.getElementById("btn-rules");
 
-    const thoughtPanelTitle = document.getElementById("thought-panel-title");
-    const aiThoughtContent = document.getElementById("ai-thought-content");
+    const p0Avatar = document.getElementById("p0-avatar");
+    const p1Avatar = document.getElementById("p1-avatar");
+    const p2Avatar = document.getElementById("p2-avatar");
+
+    const p1ThoughtPopover = document.getElementById("p1-thought-popover");
+    const p1PopoverTime = document.getElementById("p1-popover-time");
+    const p1PopoverBody = document.getElementById("p1-popover-body");
+
+    const p2ThoughtPopover = document.getElementById("p2-thought-popover");
+    const p2PopoverTime = document.getElementById("p2-popover-time");
+    const p2PopoverBody = document.getElementById("p2-popover-body");
+
+    const toastContainer = document.getElementById("toast-container");
     const cardCounter = document.getElementById("card-counter");
     const eventLogs = document.getElementById("event-logs");
 
@@ -150,13 +161,14 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             const data = await res.json();
             if (data.error) {
-                alert("⚠️ " + data.error);
+                showToast("⚠️ " + data.error, "warning");
             } else {
                 selectedCards = [];
                 updateUI(data);
             }
         } catch (err) {
             console.error("Play card error:", err);
+            showToast("⚠️ 网络请求异常", "warning");
         }
     }
 
@@ -165,14 +177,29 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await sessionFetch("/api/game/pass", { method: "POST" });
             const data = await res.json();
             if (data.error) {
-                alert("⚠️ " + data.error);
+                showToast("⚠️ " + data.error, "warning");
             } else {
                 selectedCards = [];
                 updateUI(data);
             }
         } catch (err) {
             console.error("Pass error:", err);
+            showToast("⚠️ 网络请求异常", "warning");
         }
+    }
+
+    // 轻量级 Tips 提示 (替代浏览器 alert 弹窗)
+    function showToast(message, type = "info") {
+        if (!toastContainer) return;
+        const toast = document.createElement("div");
+        toast.className = `toast-item ${type}`;
+        toast.innerHTML = message;
+        toastContainer.appendChild(toast);
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 2600);
     }
 
     async function handleHint() {
@@ -181,9 +208,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await res.json();
             if (!data.hint || data.hint.length === 0) {
                 if (data.isPass) {
-                    alert("💡 AI 建议：当前上家牌力强劲或配合队友控盘，建议【过牌 (PASS)】");
+                    showToast("💡 AI 建议：当前上家牌力压制，要不起，建议【过牌 (PASS)】", "warning");
                 } else {
-                    alert("💡 暂无可用出牌建议");
+                    showToast("💡 暂无可用出牌建议", "info");
                 }
                 return;
             }
@@ -191,8 +218,10 @@ document.addEventListener("DOMContentLoaded", () => {
             selectedCards = [...data.hint];
             renderHand(currentState.humanHand);
             btnPlay.disabled = false;
+            showToast(`💡 AI 走法推荐: <strong>${data.hint.join(", ")}</strong>`, "info");
         } catch (err) {
             console.error("Hint error:", err);
+            showToast("⚠️ 获取提示失败", "warning");
         }
     }
 
@@ -298,18 +327,22 @@ document.addEventListener("DOMContentLoaded", () => {
     function updateRoleBadges(roles, landlordId, stage) {
         const badges = [p0RoleBadge, p1RoleBadge, p2RoleBadge];
         const boxes = [null, player1Box, player2Box];
+        const avatars = [p0Avatar, p1Avatar, p2Avatar];
 
         for (let i = 0; i < 3; i++) {
             const badge = badges[i];
+            const avatar = avatars[i];
             if (stage === "BIDDING" || landlordId < 0) {
                 badge.textContent = "待定";
                 badge.className = "role-badge";
                 if (boxes[i]) boxes[i].classList.remove("is-landlord");
+                if (avatar) avatar.textContent = (i === 0) ? "👤" : "🤔";
             } else {
                 const isLandlord = (i === landlordId);
                 badge.textContent = isLandlord ? "👑 地主" : "🌾 农民";
                 badge.className = "role-badge " + (isLandlord ? "role-landlord" : "role-farmer");
                 if (boxes[i]) boxes[i].classList.toggle("is-landlord", isLandlord);
+                if (avatar) avatar.textContent = isLandlord ? "🤠" : "🧑‍🌾";
             }
         }
     }
@@ -385,14 +418,32 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!act) return;
             const container = areaMap[idx];
 
+            // 检查胜率特效 class
+            let winRateAnimClass = "";
+            if (currentState && currentState.aiThoughts && idx > 0) {
+                const thoughtKey = (idx === 1) ? "p1" : "p2";
+                const thought = currentState.aiThoughts[thoughtKey];
+                if (thought && thought.type === "play" && thought.evals && thought.evals.length > 0) {
+                    const topWinRate = thought.evals[0].winRate;
+                    if (topWinRate >= 75.0) {
+                        winRateAnimClass = "anim-win-high";
+                    } else if (topWinRate <= 30.0) {
+                        winRateAnimClass = "anim-win-low";
+                    }
+                }
+            }
+
             if (act.isPass) {
                 const badge = document.createElement("div");
-                badge.className = "pass-badge";
+                badge.className = `pass-badge ${winRateAnimClass}`;
                 badge.textContent = "不出 / PASS";
                 container.appendChild(badge);
             } else if (act.cards && act.cards.length > 0) {
                 act.cards.forEach(cardSymbol => {
                     const el = createCardElement(cardSymbol, true);
+                    if (winRateAnimClass) {
+                        el.classList.add(winRateAnimClass);
+                    }
                     container.appendChild(el);
                 });
 
@@ -502,43 +553,62 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function renderAiThoughts(aiThoughts, roles, stage) {
+        const p1Popover = p1ThoughtPopover;
+        const p2Popover = p2ThoughtPopover;
+
         if (!aiThoughts || Object.keys(aiThoughts).length === 0) {
-            aiThoughtContent.innerHTML = '<p class="placeholder-text">等待 AI 做出决策...</p>';
+            if (p1Popover) p1Popover.classList.add("hidden");
+            if (p2Popover) p2Popover.classList.add("hidden");
             return;
         }
 
-        let html = "";
-        for (const [key, thought] of Object.entries(aiThoughts)) {
-            const pId = key === "p1" ? 1 : 2;
-            const roleStr = (roles && roles[pId] && roles[pId] !== "待定") ? ` (${roles[pId]})` : "";
-            const pName = `AI 玩家 ${pId} (P${pId})${roleStr}`;
+        // 分别为 P1 和 P2 渲染桌面外侧的专属思考面板
+        [ { id: 1, popover: p1Popover, timeEl: p1PopoverTime, bodyEl: p1PopoverBody, key: "p1" },
+          { id: 2, popover: p2Popover, timeEl: p2PopoverTime, bodyEl: p2PopoverBody, key: "p2" }
+        ].forEach(({ id, popover, timeEl, bodyEl, key }) => {
+            if (!popover || !bodyEl) return;
+            const thought = aiThoughts[key];
+            if (!thought) {
+                popover.classList.add("hidden");
+                return;
+            }
+
+            popover.classList.remove("hidden");
+            if (timeEl) timeEl.textContent = `${thought.timeMs || 0} ms`;
+
+            const roleStr = (roles && roles[id] && roles[id] !== "待定") ? ` (${roles[id]})` : "";
+            let html = "";
 
             if (thought.type === "bid") {
                 const decisionText = thought.shouldCall ? "👑 叫地主" : "🙅 不叫";
                 const decisionColor = thought.shouldCall ? "#f59e0b" : "#94a3b8";
                 const widthPercent = Math.min(100, Math.max(5, thought.winRate));
-                const controlScoreText = (thought.controlScore !== undefined) ? ` | 硬牌力分: <strong>${thought.controlScore}</strong>` : "";
+                const controlScoreText = (thought.controlScore !== undefined) ? `<div>硬牌力分: <strong>${thought.controlScore}</strong></div>` : "";
                 const summaryHtml = thought.summary ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">📝 ${thought.summary}</div>` : "";
 
-                html += `<div class="thought-item">
-                    <div class="thought-header">
-                        <strong>${pName} [深度叫牌推演]</strong>
-                        <span>耗时: ${thought.timeMs} ms</span>
-                    </div>
-                    <div style="margin-bottom: 4px;">底牌采样 MCTS 胜率: <strong>${thought.winRate}%</strong> (世界: ${thought.sims})${controlScoreText}</div>
-                    <div class="progress-bar-bg" style="margin-bottom: 6px;">
+                html = `
+                    <div style="font-weight: 600; color: #38bdf8; margin-bottom: 2px;">底牌采样推演</div>
+                    <div>预估胜率: <strong style="color: #f59e0b;">${thought.winRate}%</strong> (${thought.sims} 世界)</div>
+                    ${controlScoreText}
+                    <div class="progress-bar-bg" style="margin: 4px 0;">
                         <div class="progress-bar-fill" style="width: ${widthPercent}%;"></div>
                     </div>
-                    <div>决定: <strong style="color: ${decisionColor}; font-size: 13px;">${decisionText}</strong> (基准 50.0%)</div>
+                    <div>表态: <strong style="color: ${decisionColor};">${decisionText}</strong></div>
                     ${summaryHtml}
-                </div>`;
+                `;
             } else {
-                html += `<div class="thought-item">
-                    <div class="thought-header">
-                        <strong>${pName} [出牌决策]</strong>
-                        <span>耗时: ${thought.timeMs} ms</span>
+                let winRateAnimIcon = "";
+                if (thought.evals && thought.evals.length > 0) {
+                    const topRate = thought.evals[0].winRate;
+                    if (topRate >= 75.0) winRateAnimIcon = "🔥";
+                    else if (topRate <= 30.0) winRateAnimIcon = "💧";
+                }
+
+                html = `
+                    <div style="font-weight: 600; color: #f59e0b; margin-bottom: 4px;">
+                        ${winRateAnimIcon} 决策出牌: <strong>${thought.move}</strong>
                     </div>
-                    <div style="margin-bottom: 6px;">选定着法: <strong style="color: #f59e0b;">${thought.move}</strong></div>`;
+                `;
 
                 if (thought.evals && thought.evals.length > 0) {
                     thought.evals.forEach(ev => {
@@ -546,7 +616,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         html += `
                             <div style="font-size: 11px; margin-top: 4px; display: flex; justify-content: space-between;">
                                 <span>${ev.cards}</span>
-                                <span>胜率: ${ev.winRate}% (访问: ${ev.visits})</span>
+                                <span>${ev.winRate}% (${ev.visits})</span>
                             </div>
                             <div class="progress-bar-bg">
                                 <div class="progress-bar-fill" style="width: ${widthPercent}%;"></div>
@@ -554,10 +624,10 @@ document.addEventListener("DOMContentLoaded", () => {
                         `;
                     });
                 }
-                html += `</div>`;
             }
-        }
-        aiThoughtContent.innerHTML = html;
+
+            bodyEl.innerHTML = html;
+        });
     }
 
     function renderLogs(logs) {
