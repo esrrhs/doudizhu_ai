@@ -260,7 +260,6 @@ document.addEventListener("DOMContentLoaded", () => {
         playingControls.classList.add("hidden");
         bottomCardsLabel.textContent = "三张底牌 (待揭晓)";
         trickStatusText.textContent = "叫地主阶段";
-        thoughtPanelTitle.textContent = "🔍 AI 叫牌思考 (底牌蒙特卡洛采样)";
 
         const isHumanBidTurn = (state.currentBidder === 0);
         btnCallLandlord.disabled = !isHumanBidTurn;
@@ -292,7 +291,6 @@ document.addEventListener("DOMContentLoaded", () => {
         biddingControls.classList.add("hidden");
         playingControls.classList.remove("hidden");
         bottomCardsLabel.textContent = "三张底牌 (地主所得)";
-        thoughtPanelTitle.textContent = "🔍 AI 出牌雷达 (PIMC 2v1 推演)";
 
         const isHumanTurn = (state.activePlayer === 0) && !state.isGameOver;
         btnPlay.disabled = !isHumanTurn || selectedCards.length === 0;
@@ -466,8 +464,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const activeSelectedMap = {};
 
-        cards.forEach((cardSymbol) => {
+        cards.forEach((cardSymbol, idx) => {
             const el = createCardElement(cardSymbol, false);
+            el.style.zIndex = idx + 1;
 
             const needed = selectedMap[cardSymbol] || 0;
             const currentCount = activeSelectedMap[cardSymbol] || 0;

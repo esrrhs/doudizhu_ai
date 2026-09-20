@@ -95,7 +95,8 @@ body {
     justify-content: center;
     padding: 16px 20px;
     background: radial-gradient(circle, #1e293b 0%, #0f172a 100%);
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
     position: relative;
 }
 
@@ -349,6 +350,7 @@ body {
     align-items: center;
     gap: 6px;
     width: 100%;
+    overflow: visible;
 }
 
 .human-info {
@@ -359,17 +361,18 @@ body {
     gap: 6px;
 }
 
-/* 手牌视觉组件 */
+/* 手牌视觉组件 - 扑克重叠排布与防遮挡 */
 .hand-cards-display {
     display: flex;
     justify-content: center;
-    gap: 4px;
-    padding-top: 30px;
+    align-items: flex-end;
+    padding-top: 36px;
     padding-bottom: 8px;
-    min-height: 120px;
+    min-height: 125px;
+    width: 100%;
     max-width: 100%;
-    overflow-x: auto;
-    overflow-y: visible;
+    box-sizing: border-box;
+    overflow: visible;
 }
 
 .card {
@@ -393,18 +396,30 @@ body {
     flex-shrink: 0;
 }
 
-.card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
-    z-index: 5;
+.hand-cards-display .card {
+    width: 50px;
+    height: 78px;
+    margin-left: -22px;
+    flex-shrink: 0;
+    box-shadow: -2px 3px 6px rgba(0, 0, 0, 0.35);
 }
 
-.card.selected {
-    transform: translateY(-24px);
-    box-shadow: 0 14px 22px rgba(59, 130, 246, 0.7);
+.hand-cards-display .card:first-child {
+    margin-left: 0;
+}
+
+.hand-cards-display .card:hover {
+    transform: translateY(-14px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.6);
+    z-index: 100 !important;
+}
+
+.hand-cards-display .card.selected {
+    transform: translateY(-28px);
+    box-shadow: 0 14px 24px rgba(59, 130, 246, 0.7);
     border-color: #2563eb;
     background: #eff6ff;
-    z-index: 10;
+    z-index: 110 !important;
 }
 
 .card.red {
@@ -482,7 +497,7 @@ body {
 
 /* 侧边栏与战术面板 */
 .sidebar {
-    width: 380px;
+    width: 290px;
     background: var(--panel-bg);
     border-left: 1px solid #334155;
     display: flex;
