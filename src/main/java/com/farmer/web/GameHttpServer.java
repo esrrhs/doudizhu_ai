@@ -266,7 +266,11 @@ public class GameHttpServer {
         dto.put("message", message);
         dto.put("stage", session.getStage().name());
         dto.put("currentBidder", session.getCurrentBidder());
-        dto.put("bidActions", List.of(session.getBidActions()));
+        List<String> bidActionList = new ArrayList<>();
+        for (String a : session.getBidActions()) {
+            bidActionList.add(a);
+        }
+        dto.put("bidActions", bidActionList);
         dto.put("landlordId", session.getLandlordId());
         dto.put("bottomCardsRevealed", session.isBottomCardsRevealed());
 
