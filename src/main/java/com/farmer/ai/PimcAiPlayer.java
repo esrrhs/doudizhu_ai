@@ -12,6 +12,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.IntStream;
 
 /**
  * 斗地主 PIMC AI 引擎
@@ -34,7 +36,7 @@ public class PimcAiPlayer {
     }
 
     public PimcAiPlayer() {
-        this(20, 150);
+        this(80, 500);
     }
 
     public static class MoveEvaluation {
@@ -47,7 +49,7 @@ public class PimcAiPlayer {
             this.move = move;
         }
 
-        public void record(int visits, double winRate) {
+        public synchronized void record(int visits, double winRate) {
             this.totalVisits += visits;
             this.sumWinRate += winRate;
             this.sampleCount++;
@@ -148,10 +150,12 @@ public class PimcAiPlayer {
             evalMap.put(m, new MoveEvaluation(m));
         }
 
-        // 多可能世界采样
-        for (int k = 0; k < numDeterminizations; k++) {
-            GameState world = Determinizer.determinize(publicView, random);
-            MctsNode root = searcher.search(world, mctsIterationsPerWorld);
+        // 多可能世界并行采样推演 (充分释放多核心算力)
+        IntStream.range(0, numDeterminizations).parallel().forEach(k -> {
+            Random workerRandom = ThreadLocalRandom.current();
+            GameState world = Determinizer.determinize(publicView, workerRandom);
+            MctsSearcher workerSearcher = new MctsSearcher(searcher.getExplorationParam(), workerRandom);
+            MctsNode root = workerSearcher.search(world, mctsIterationsPerWorld);
 
             for (Map.Entry<Move, MctsNode> entry : root.getChildren().entrySet()) {
                 Move move = entry.getKey();
@@ -162,7 +166,7 @@ public class PimcAiPlayer {
                     eval.record(child.getVisits(), child.getWinRate(myId));
                 }
             }
-        }
+        });
 
         List<MoveEvaluation> evalList = new ArrayList<>(evalMap.values());
         evalList.sort(Comparator.comparingInt(MoveEvaluation::getTotalVisits).reversed()

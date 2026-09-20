@@ -101,4 +101,23 @@ class PimcAITest {
         // 首出必须是小牌 3 或 4，绝不能把大牌 2 率先浪费
         assertThat(result.getSelectedMove().toCardString()).isIn("3", "4");
     }
+
+    @Test
+    @DisplayName("测试大参数下完整 20 张手牌的 PIMC 决策耗时与深层展开")
+    void testPimcScaleBenchmark() {
+        Random random = new Random(42);
+        Deck.DealResult deal = Deck.deal(random, 0);
+        GameState state = new GameState(deal.playerHands(), 0, deal.bottomCards());
+        PublicView view = state.getPublicView(0);
+
+        // 采样 80 个世界，每个世界 500 次 MCTS 迭代 (共 40,000 次深度推演模拟)
+        PimcAiPlayer ai = new PimcAiPlayer(80, 500, random);
+        long start = System.currentTimeMillis();
+        PimcAiPlayer.DecisionResult result = ai.decide(view);
+        long cost = System.currentTimeMillis() - start;
+
+        System.out.printf("[BENCHMARK] 80 worlds * 500 iter: cost=%d ms, selectedMove=%s, evaluations=%d\n",
+                cost, result.getSelectedMove().toCardString(), result.getEvaluations().size());
+        assertThat(result.getSelectedMove()).isNotNull();
+    }
 }

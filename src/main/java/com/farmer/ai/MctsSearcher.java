@@ -26,6 +26,10 @@ public class MctsSearcher {
         this(Math.sqrt(2.0), new Random());
     }
 
+    public double getExplorationParam() {
+        return explorationParam;
+    }
+
     public MctsNode search(GameState state, int iterations) {
         List<Move> rootLegalMoves = state.getLegalMoves();
         List<Move> prunedRootMoves = pruneCandidateMoves(rootLegalMoves, state.getActivePlayer().getCardCount(), 15);

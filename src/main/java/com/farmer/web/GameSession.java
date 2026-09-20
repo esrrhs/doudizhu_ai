@@ -51,9 +51,9 @@ public class GameSession {
     private final Random random = new Random();
 
     public GameSession() {
-        this.aiPlayer1 = new PimcAiPlayer(25, 140, random);
-        this.aiPlayer2 = new PimcAiPlayer(25, 140, random);
-        this.hintAi = new PimcAiPlayer(20, 120, random);
+        this.aiPlayer1 = new PimcAiPlayer(80, 500, random);
+        this.aiPlayer2 = new PimcAiPlayer(80, 500, random);
+        this.hintAi = new PimcAiPlayer(60, 400, random);
         // 默认进入互动式叫地主流程 (随机首叫玩家)
         startBiddingGame(-1);
     }
@@ -157,8 +157,8 @@ public class GameSession {
         int activeId = currentBidder;
         Hand myHand = initialHands[activeId];
 
-        // 采用思路二：采样 25 次底牌与对手分布，快速模拟推演地主胜率 (阈值 0.50)
-        BidEvaluator.BidResult result = BidEvaluator.evaluate(myHand, 25, 0.50, random);
+        // 采用思路二：采样 100 次底牌与对手分布，快速模拟推演地主胜率 (阈值 0.50)
+        BidEvaluator.BidResult result = BidEvaluator.evaluate(myHand, 100, 0.50, random);
         lastBidThoughts.put(activeId, result);
 
         if (result.shouldCall()) {
