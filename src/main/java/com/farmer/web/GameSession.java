@@ -1,5 +1,6 @@
 package com.farmer.web;
 
+import com.farmer.ai.BidEvaluator;
 import com.farmer.ai.PimcAiPlayer;
 import com.farmer.game.GameState;
 import com.farmer.game.PublicView;
@@ -18,9 +19,28 @@ import java.util.Map;
 import java.util.Random;
 
 /**
- * 斗地主网页端游戏会话 (支持真人与 AI 协同对抗)
+ * 斗地主网页端游戏会话 (支持叫地主阶段与 PIMC 2v1 实战对弈)
  */
 public class GameSession {
+
+    public enum Stage {
+        BIDDING,
+        PLAYING,
+        GAME_OVER
+    }
+
+    private Stage stage;
+    private int currentBidder;
+    private int bidStartPlayer;
+    private int bidsCount;
+    private final String[] bidActions = new String[3];
+    private final Map<Integer, BidEvaluator.BidResult> lastBidThoughts = new HashMap<>();
+
+    private final Hand[] initialHands = new Hand[3];
+    private List<Rank> bottomCards = new ArrayList<>(3);
+    private boolean bottomCardsRevealed = false;
+    private int landlordId = -1;
+
     private GameState gameState;
     private final PimcAiPlayer aiPlayer1;
     private final PimcAiPlayer aiPlayer2;
@@ -34,19 +54,198 @@ public class GameSession {
         this.aiPlayer1 = new PimcAiPlayer(20, 120, random);
         this.aiPlayer2 = new PimcAiPlayer(20, 120, random);
         this.hintAi = new PimcAiPlayer(15, 100, random);
-        newGame(0); // 默认玩家 0 为地主
+        // 默认进入互动式叫地主流程 (随机首叫玩家)
+        startBiddingGame(-1);
     }
 
-    public synchronized void newGame(int landlordId) {
-        Deck.DealResult dealResult = Deck.deal(random, landlordId);
-        this.gameState = new GameState(dealResult.playerHands(), landlordId, dealResult.bottomCards());
+    /**
+     * 开启支持【叫地主】环节的标准对局
+     */
+    public synchronized void startBiddingGame(int startBidder) {
+        this.stage = Stage.BIDDING;
+        this.landlordId = -1;
+        this.bottomCardsRevealed = false;
+        this.bidsCount = 0;
+        Arrays.fill(this.bidActions, null);
+        Arrays.fill(this.playerLastActions, null);
         this.lastAiThoughts.clear();
+        this.lastBidThoughts.clear();
         this.eventLogs.clear();
+
+        // 54 张牌洗牌发牌
+        List<Rank> deck = Deck.createStandard54Cards();
+        Collections.shuffle(deck, random);
+
+        for (int i = 0; i < 3; i++) {
+            initialHands[i] = new Hand();
+            for (int j = 0; j < Deck.FARMER_CARDS_COUNT; j++) {
+                initialHands[i].add(deck.get(i * Deck.FARMER_CARDS_COUNT + j));
+            }
+        }
+
+        bottomCards = new ArrayList<>(3);
+        for (int i = 51; i < 54; i++) {
+            bottomCards.add(deck.get(i));
+        }
+
+        this.currentBidder = (startBidder >= 0 && startBidder <= 2) ? startBidder : random.nextInt(3);
+        this.bidStartPlayer = this.currentBidder;
+        this.gameState = null;
+
+        String starterName = (currentBidder == 0) ? "玩家 P0 (真人)" : ("AI 玩家 P" + currentBidder);
+        addLog(String.format("🎲 新局发牌完毕（各 17 张），进入【叫地主】阶段！由 %s 首先表态。", starterName));
+    }
+
+    /**
+     * 直接指定地主开局 (快捷模式)
+     */
+    public synchronized void newGame(int targetLandlordId) {
+        Deck.DealResult dealResult = Deck.deal(random, targetLandlordId);
+        for (int i = 0; i < 3; i++) {
+            initialHands[i] = dealResult.playerHands().get(i);
+        }
+        this.bottomCards = dealResult.bottomCards();
+        this.landlordId = targetLandlordId;
+        this.bottomCardsRevealed = true;
+        this.stage = Stage.PLAYING;
+        this.gameState = new GameState(dealResult.playerHands(), targetLandlordId, dealResult.bottomCards());
+        this.lastAiThoughts.clear();
+        this.lastBidThoughts.clear();
+        this.eventLogs.clear();
+        Arrays.fill(this.bidActions, null);
         Arrays.fill(this.playerLastActions, null);
 
-        String landlordName = (landlordId == 0) ? "玩家 P0 (真人)" : ("AI 玩家 P" + landlordId);
-        addLog(String.format("🎲 新局开始！%s 成为地主，获得 3 张底牌: %s",
+        String landlordName = (targetLandlordId == 0) ? "玩家 P0 (真人)" : ("AI 玩家 P" + targetLandlordId);
+        addLog(String.format("🎲 快速开局！%s 成为地主，翻开 3 张底牌: %s",
                 landlordName, formatCards(dealResult.bottomCards())));
+    }
+
+    /**
+     * 真人表态叫地主 / 不叫
+     */
+    public synchronized String humanBid(boolean call) {
+        if (stage != Stage.BIDDING) {
+            return "当前不在叫地主阶段";
+        }
+        if (currentBidder != 0) {
+            return "当前不是你的叫牌回合";
+        }
+
+        if (call) {
+            bidActions[0] = "叫地主";
+            addLog("👉 玩家 P0 (真人) 选择了【叫地主】！");
+            finalizeLandlord(0);
+        } else {
+            bidActions[0] = "不叫";
+            addLog("👉 玩家 P0 (真人) 选择了【不叫】。");
+            advanceBidder();
+        }
+        return null;
+    }
+
+    /**
+     * AI 玩家表态叫地主 / 不叫 (基于思路二：底牌蒙特卡洛采样推演胜率)
+     */
+    public synchronized String aiBidStep() {
+        if (stage != Stage.BIDDING) {
+            return "当前不在叫地主阶段";
+        }
+        if (currentBidder == 0) {
+            return "当前轮到真人叫牌";
+        }
+
+        int activeId = currentBidder;
+        Hand myHand = initialHands[activeId];
+
+        // 采用思路二：采样 25 次底牌与对手分布，快速模拟推演地主胜率 (阈值 0.50)
+        BidEvaluator.BidResult result = BidEvaluator.evaluate(myHand, 25, 0.50, random);
+        lastBidThoughts.put(activeId, result);
+
+        if (result.shouldCall()) {
+            bidActions[activeId] = "叫地主";
+            addLog(String.format("🤖 玩家 P%d (AI) [底牌推演预估胜率 %.1f%%] 决定【叫地主】！",
+                    activeId, result.winRate() * 100));
+            finalizeLandlord(activeId);
+            return "叫地主";
+        } else {
+            bidActions[activeId] = "不叫";
+            addLog(String.format("🤖 玩家 P%d (AI) [底牌推演预估胜率 %.1f%%] 决定【不叫】。",
+                    activeId, result.winRate() * 100));
+            advanceBidder();
+            return "不叫";
+        }
+    }
+
+    private void advanceBidder() {
+        bidsCount++;
+        if (bidsCount >= 3) {
+            // 三家都不叫，流局重新发牌
+            addLog("⚠️ 三位玩家均选择【不叫】，流局！重新洗牌发牌...");
+            startBiddingGame((bidStartPlayer + 1) % 3);
+        } else {
+            currentBidder = (currentBidder + 1) % 3;
+        }
+    }
+
+    private void finalizeLandlord(int chosenLandlordId) {
+        this.landlordId = chosenLandlordId;
+        this.bottomCardsRevealed = true;
+
+        // 底牌归地主所有 (手牌增至 20 张)
+        for (Rank r : bottomCards) {
+            initialHands[chosenLandlordId].add(r);
+        }
+
+        List<Hand> finalHands = List.of(
+                initialHands[0].copy(),
+                initialHands[1].copy(),
+                initialHands[2].copy()
+        );
+
+        this.gameState = new GameState(finalHands, chosenLandlordId, bottomCards);
+        this.stage = Stage.PLAYING;
+
+        String landlordName = (chosenLandlordId == 0) ? "玩家 P0 (真人)" : ("AI 玩家 P" + chosenLandlordId);
+        addLog(String.format("👑 %s 成为地主！获得 3 张底牌: %s，手牌增至 20 张并先手出牌！",
+                landlordName, formatCards(bottomCards)));
+    }
+
+    public synchronized Stage getStage() {
+        if (stage == Stage.PLAYING && gameState != null && gameState.isGameOver()) {
+            return Stage.GAME_OVER;
+        }
+        return stage;
+    }
+
+    public synchronized int getCurrentBidder() {
+        return currentBidder;
+    }
+
+    public synchronized String[] getBidActions() {
+        return bidActions.clone();
+    }
+
+    public synchronized Map<Integer, BidEvaluator.BidResult> getLastBidThoughts() {
+        return Collections.unmodifiableMap(lastBidThoughts);
+    }
+
+    public synchronized boolean isBottomCardsRevealed() {
+        return bottomCardsRevealed;
+    }
+
+    public synchronized List<Rank> getBottomCards() {
+        return Collections.unmodifiableList(bottomCards);
+    }
+
+    public synchronized Hand getPlayerHand(int playerId) {
+        if (stage == Stage.PLAYING && gameState != null) {
+            return gameState.getPlayer(playerId).getHand();
+        }
+        return initialHands[playerId];
+    }
+
+    public synchronized int getLandlordId() {
+        return landlordId;
     }
 
     public synchronized GameState getGameState() {
@@ -73,7 +272,10 @@ public class GameSession {
     }
 
     public synchronized String humanPlay(List<String> cardSymbols) {
-        if (gameState.isGameOver()) {
+        if (stage == Stage.BIDDING) {
+            return "当前仍在叫地主阶段，尚未确定地主";
+        }
+        if (gameState == null || gameState.isGameOver()) {
             return "游戏已结束，请重新开局";
         }
         if (gameState.getActivePlayerIndex() != 0) {
@@ -120,7 +322,10 @@ public class GameSession {
     }
 
     public synchronized String humanPass() {
-        if (gameState.isGameOver()) {
+        if (stage == Stage.BIDDING) {
+            return "当前仍在叫地主阶段";
+        }
+        if (gameState == null || gameState.isGameOver()) {
             return "游戏已结束，请重新开局";
         }
         if (gameState.getActivePlayerIndex() != 0) {
@@ -140,7 +345,10 @@ public class GameSession {
     }
 
     public synchronized String aiStep() {
-        if (gameState.isGameOver()) {
+        if (stage == Stage.BIDDING) {
+            return aiBidStep();
+        }
+        if (gameState == null || gameState.isGameOver()) {
             return "游戏已结束";
         }
         int activeId = gameState.getActivePlayerIndex();
@@ -179,7 +387,7 @@ public class GameSession {
     }
 
     public synchronized Move getHumanHint() {
-        if (gameState.isGameOver() || gameState.getActivePlayerIndex() != 0) {
+        if (stage != Stage.PLAYING || gameState == null || gameState.isGameOver() || gameState.getActivePlayerIndex() != 0) {
             return null;
         }
         PublicView view = gameState.getPublicView(0);

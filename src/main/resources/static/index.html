@@ -15,11 +15,11 @@
                 <h1>斗地主 AI 对战室 <span class="badge">PIMC + 2v1 协同对抗 MCTS</span></h1>
             </div>
             <div class="header-actions">
-                <button id="btn-rules" class="btn btn-secondary">📖 游戏规则</button>
+                <button id="btn-rules" class="btn btn-secondary">📖 规则与算法</button>
                 <div class="new-game-group">
-                    <button id="btn-new-landlord" class="btn btn-gold">👑 我当地主</button>
-                    <button id="btn-new-farmer" class="btn btn-secondary">🌾 我当农民</button>
-                    <button id="btn-new-random" class="btn btn-secondary">🎲 随机身份</button>
+                    <button id="btn-new-bidding" class="btn btn-gold">🎲 重新发牌 (叫地主)</button>
+                    <button id="btn-quick-landlord" class="btn btn-secondary">👑 快速当地主</button>
+                    <button id="btn-quick-farmer" class="btn btn-secondary">🌾 快速当农民</button>
                 </div>
             </div>
         </header>
@@ -36,22 +36,22 @@
                             <div id="player-1" class="player-box ai-player">
                                 <div class="player-avatar" id="p1-avatar">🤖</div>
                                 <div class="player-info">
-                                    <div class="player-name">AI 玩家 1 (P1) <span id="p1-role-badge" class="role-badge">农民</span></div>
+                                    <div class="player-name">AI 玩家 1 (P1) <span id="p1-role-badge" class="role-badge">待定</span></div>
                                     <div class="card-count"><span id="p1-card-count">17</span> 张手牌</div>
                                 </div>
                                 <div id="p1-status" class="player-status">等待中</div>
                             </div>
-                            <!-- P1 面前出牌/过牌展示区 -->
+                            <!-- P1 面前出牌/过牌/叫牌展示区 -->
                             <div id="p1-action-area" class="player-action-display"></div>
                         </div>
 
                         <!-- 桌面中央底牌与公共状态 -->
                         <div class="center-trick-area">
                             <div class="bottom-cards-wrapper">
-                                <div class="bottom-cards-label">三张底牌</div>
+                                <div class="bottom-cards-label" id="bottom-cards-label">三张底牌 (待揭晓)</div>
                                 <div id="bottom-cards-container" class="bottom-cards-display"></div>
                             </div>
-                            <div class="trick-status-badge" id="trick-status-text">自由出牌</div>
+                            <div class="trick-status-badge" id="trick-status-text">叫地主阶段</div>
                         </div>
 
                         <!-- AI 玩家 2 区域 -->
@@ -59,25 +59,33 @@
                             <div id="player-2" class="player-box ai-player">
                                 <div class="player-avatar" id="p2-avatar">🧠</div>
                                 <div class="player-info">
-                                    <div class="player-name">AI 玩家 2 (P2) <span id="p2-role-badge" class="role-badge">农民</span></div>
+                                    <div class="player-name">AI 玩家 2 (P2) <span id="p2-role-badge" class="role-badge">待定</span></div>
                                     <div class="card-count"><span id="p2-card-count">17</span> 张手牌</div>
                                 </div>
                                 <div id="p2-status" class="player-status">等待中</div>
                             </div>
-                            <!-- P2 面前出牌/过牌展示区 -->
+                            <!-- P2 面前出牌/过牌/叫牌展示区 -->
                             <div id="p2-action-area" class="player-action-display"></div>
                         </div>
                     </div>
 
                     <!-- 底部人类玩家区 -->
                     <div class="human-section">
-                        <!-- P0 (真人) 面前出牌/过牌展示区 -->
+                        <!-- P0 (真人) 面前出牌/过牌/叫牌展示区 -->
                         <div id="p0-action-area" class="player-action-display human-action-display"></div>
 
                         <!-- 操作提示与控制按钮 -->
                         <div class="human-controls">
-                            <div class="turn-indicator" id="turn-indicator">轮到你出牌</div>
-                            <div class="action-buttons">
+                            <div class="turn-indicator" id="turn-indicator">正在初始化...</div>
+
+                            <!-- 叫地主阶段控制区 -->
+                            <div id="bidding-controls" class="action-buttons">
+                                <button id="btn-call-landlord" class="btn btn-gold">👑 叫地主</button>
+                                <button id="btn-pass-landlord" class="btn btn-secondary">🙅 不 叫</button>
+                            </div>
+
+                            <!-- 正式出牌阶段控制区 -->
+                            <div id="playing-controls" class="action-buttons hidden">
                                 <button id="btn-play" class="btn btn-primary" disabled>出 牌</button>
                                 <button id="btn-hint" class="btn btn-info">💡 AI 提示</button>
                                 <button id="btn-pass" class="btn btn-warning" disabled>不出 (PASS)</button>
@@ -89,8 +97,8 @@
                             <div class="human-info">
                                 <span class="human-avatar">👤</span>
                                 <strong>你 (玩家 P0)</strong>
-                                <span id="p0-role-badge" class="role-badge role-landlord">地主</span>
-                                <span class="hand-count">(剩余 <span id="p0-card-count">20</span> 张)</span>
+                                <span id="p0-role-badge" class="role-badge">待定</span>
+                                <span class="hand-count">(剩余 <span id="p0-card-count">17</span> 张)</span>
                             </div>
                             <div id="human-hand" class="hand-cards-display"></div>
                         </div>
@@ -102,9 +110,9 @@
             <aside class="sidebar">
                 <!-- 实时 AI 思考雷达 -->
                 <div class="panel ai-thought-panel">
-                    <h3>🔍 AI 思考雷达 (PIMC 2v1 战术推演)</h3>
+                    <h3 id="thought-panel-title">🔍 AI 思考雷达 (PIMC 推演)</h3>
                     <div id="ai-thought-content" class="ai-thought-content">
-                        <p class="placeholder-text">等待 AI 做出决策，将在此展示可能世界采样统计与各候选出牌的胜率评估...</p>
+                        <p class="placeholder-text">等待 AI 做出决策...</p>
                     </div>
                 </div>
 
@@ -123,30 +131,34 @@
         </main>
     </div>
 
-    <!-- 游戏规则弹窗 -->
+    <!-- 游戏规则与算法弹窗 -->
     <div id="rules-modal" class="modal-overlay hidden">
         <div class="modal-content rules-modal-content">
             <div class="modal-header">
-                <h2>📖 斗地主游戏规则与 AI 算法说明</h2>
+                <h2>📖 斗地主规则与 PIMC AI 算法说明</h2>
                 <button id="rules-close-icon" class="btn-close">&times;</button>
             </div>
             <div class="rules-body">
                 <section class="rule-sec highlight-sec">
-                    <h4>👑 1. 人数与身份设定</h4>
-                    <p>总牌数 54 张（含大王、小王）。3 位玩家中 1 位为<strong>地主</strong>，另 2 位为<strong>农民</strong>。</p>
-                    <p>发牌时每人 17 张，留 3 张底牌。地主获得 3 张底牌并公开展示给所有人，地主共 20 张牌率先出牌。</p>
+                    <h4>🤖 1. AI 叫地主算法 (底牌蒙特卡洛采样推演)</h4>
+                    <p>当轮到 AI 表态是否叫地主时，AI 采用<strong>思路二（PIMC 底牌采样推演法）</strong>：</p>
+                    <ul>
+                        <li>从全场 37 张未知牌中采样 3 张作为假设底牌并入己方手牌；</li>
+                        <li>将其余 34 张牌随机分发给另外两名对手；</li>
+                        <li>通过极速推演策略（FastRollout）模拟数十局终局；</li>
+                        <li>若综合预估胜率达到或超过 <strong>50%</strong>，AI 果断选择【叫地主】；否则选择【不叫】。</li>
+                    </ul>
                 </section>
 
                 <section class="rule-sec highlight-sec">
                     <h4>🤝 2. 阵营胜负机制 (2v1 团队合作)</h4>
-                    <p><strong>农民阵营只要任意一位农民走完手牌，两位农民同时获胜！</strong></p>
-                    <p>地主必须独力面对两家，走完全部 20 张手牌方可获胜。</p>
+                    <p><strong>农民阵营只要任意一位农民率先走完手牌，两位农民同时获胜！</strong></p>
+                    <p>地主独战两家，必须率先出完全部 20 张手牌方可独揽胜果。</p>
                 </section>
 
                 <section class="rule-sec">
-                    <h4>🆓 3. 自由过牌 (允许随意不出)</h4>
-                    <p>与跑得快“有牌必打”不同，斗地主中<strong>任何时候只要上家出牌，你都可以自由选择“不出 (PASS)”</strong>，以便配合队友、保留控制牌或打出战术控盘！</p>
-                    <p>只有当你是首出牌（桌面清空）时，才不能选择不出。</p>
+                    <h4>🆓 3. 自由过牌 (允许随时不出)</h4>
+                    <p>只要当前有人出牌，玩家<strong>随时可以自由选择“不出 (PASS)”</strong>，以便配合队友、保留控制牌或打出战术控盘。只有当轮到你领牌（首出）时，才必须出牌。</p>
                 </section>
 
                 <section class="rule-sec">
@@ -155,7 +167,7 @@
                         <li><strong>点数顺序</strong>：大王(RJ) > 小王(BJ) > 2 > A > K > Q > J > 10 > 9 > 8 > 7 > 6 > 5 > 4 > 3</li>
                         <li><strong>王炸（火箭）</strong>：大王 + 小王，斗地主中最大的牌型，压制任意炸弹和所有牌型！</li>
                         <li><strong>炸弹</strong>：4 张同点数牌，仅次于王炸，能压制所有非炸弹牌型。</li>
-                        <li><strong>普通牌型</strong>：单张、对子、三张、三带一、三带二、单顺（5张起）、双顺（3对起）、飞机（2个连续三张起）、四带二（带两单或两对）。</li>
+                        <li><strong>普通牌型</strong>：单张、对子、三张、三带一、三带二、单顺（5张起）、双顺（3对起）、飞机（2个连续三张起）、四带二。</li>
                     </ul>
                 </section>
             </div>
@@ -171,8 +183,7 @@
             <h2 id="modal-title">胜负揭晓</h2>
             <p id="modal-message"></p>
             <div style="display: flex; gap: 10px; justify-content: center;">
-                <button id="modal-btn-landlord" class="btn btn-gold">再来一局 (我当地主)</button>
-                <button id="modal-btn-farmer" class="btn btn-primary">再来一局 (我当农民)</button>
+                <button id="modal-btn-restart" class="btn btn-gold">再来一局 (开局叫地主)</button>
             </div>
         </div>
     </div>

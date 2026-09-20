@@ -426,9 +426,41 @@ body {
     transform: rotate(180deg);
 }
 
-.card-center {
+.card.covered {
+    background: linear-gradient(135deg, #1e3a8a, #0f172a);
+    border: 2px solid #3b82f6;
+    color: #60a5fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.6);
+}
+
+.bid-badge {
+    padding: 6px 14px;
+    border-radius: 20px;
     font-size: 13px;
-    align-self: center;
+    font-weight: 700;
+    letter-spacing: 1px;
+    animation: popIn 0.25s ease-out;
+}
+
+.bid-badge.call {
+    background: rgba(245, 158, 11, 0.2);
+    border: 1.5px solid var(--gold);
+    color: #fde047;
+    box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3);
+}
+
+.bid-badge.pass {
+    background: rgba(100, 116, 139, 0.2);
+    border: 1.5px solid #64748b;
+    color: #cbd5e1;
+}
+
+.hidden {
+    display: none !important;
 }
 
 /* 侧边栏与战术面板 */

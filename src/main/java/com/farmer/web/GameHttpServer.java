@@ -1,6 +1,7 @@
 package com.farmer.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.farmer.ai.BidEvaluator;
 import com.farmer.ai.PimcAiPlayer;
 import com.farmer.game.GameState;
 import com.farmer.model.Move;
@@ -19,7 +20,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -27,7 +27,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 嵌入式 HTTP 服务器 (支持多 Session 并发隔离、REST API 与 Web 静态页面)
+ * 嵌入式 HTTP 服务器 (支持多 Session 并发隔离、叫地主交互、REST API 与 Web 静态页面)
  */
 public class GameHttpServer {
     private final int port;
@@ -71,6 +71,7 @@ public class GameHttpServer {
 
         server.createContext("/api/game/state", this::handleState);
         server.createContext("/api/game/new", this::handleNewGame);
+        server.createContext("/api/game/bid", this::handleBid);
         server.createContext("/api/game/play", this::handlePlay);
         server.createContext("/api/game/pass", this::handlePass);
         server.createContext("/api/game/ai-step", this::handleAiStep);
@@ -81,7 +82,7 @@ public class GameHttpServer {
         server.setExecutor(Executors.newCachedThreadPool());
         server.start();
         System.out.println("===============================================================");
-        System.out.println(" 🌐 斗地主 AI 网页客户端已启动！(支持多用户并发对局)");
+        System.out.println(" 🌐 斗地主 AI 网页客户端已启动！(支持叫地主与多用户并发对局)");
         System.out.printf(" 🎮 请在浏览器中打开: http://localhost:%d\n", port);
         System.out.println("===============================================================");
     }
@@ -151,22 +152,50 @@ public class GameHttpServer {
 
     private void handleNewGame(HttpExchange exchange) throws IOException {
         GameSession session = getSession(exchange);
-        int landlordId = 0; // 默认真人当地主
         String query = exchange.getRequestURI().getQuery();
-        if (query != null && query.contains("landlordId=")) {
+        boolean isDirect = false;
+        int targetLandlord = -1;
+
+        if (query != null) {
             for (String param : query.split("&")) {
-                if (param.startsWith("landlordId=")) {
+                if (param.startsWith("mode=direct")) {
+                    isDirect = true;
+                } else if (param.startsWith("landlordId=")) {
                     try {
-                        landlordId = Integer.parseInt(param.substring("landlordId=".length()));
+                        targetLandlord = Integer.parseInt(param.substring("landlordId=".length()));
                     } catch (NumberFormatException ignored) {}
                 }
             }
         }
-        if (landlordId < 0 || landlordId > 2) {
-            landlordId = new Random().nextInt(3);
+
+        if (isDirect && targetLandlord >= 0 && targetLandlord <= 2) {
+            session.newGame(targetLandlord);
+            sendJson(exchange, 200, buildStateDto(session, "快捷新对局已就绪！"));
+        } else {
+            session.startBiddingGame(-1);
+            sendJson(exchange, 200, buildStateDto(session, "新对局已发牌，进入叫地主阶段！"));
         }
-        session.newGame(landlordId);
-        sendJson(exchange, 200, buildStateDto(session, "新对局已创建！"));
+    }
+
+    private void handleBid(HttpExchange exchange) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendResponse(exchange, 405, "Method Not Allowed", "text/plain");
+            return;
+        }
+
+        GameSession session = getSession(exchange);
+        InputStream is = exchange.getRequestBody();
+        Map<?, ?> body = mapper.readValue(is, Map.class);
+        boolean call = Boolean.TRUE.equals(body.get("call"));
+
+        String error = session.humanBid(call);
+        if (error != null) {
+            Map<String, Object> resp = buildStateDto(session, null);
+            resp.put("error", error);
+            sendJson(exchange, 400, resp);
+        } else {
+            sendJson(exchange, 200, buildStateDto(session, call ? "你叫了地主！" : "你选择不叫"));
+        }
     }
 
     private void handlePlay(HttpExchange exchange) throws IOException {
@@ -210,8 +239,8 @@ public class GameHttpServer {
 
     private void handleAiStep(HttpExchange exchange) throws IOException {
         GameSession session = getSession(exchange);
-        String moveStr = session.aiStep();
-        sendJson(exchange, 200, buildStateDto(session, "AI 思考完成: " + moveStr));
+        String actionStr = session.aiStep();
+        sendJson(exchange, 200, buildStateDto(session, "AI 决策: " + actionStr));
     }
 
     private void handleHint(HttpExchange exchange) throws IOException {
@@ -233,58 +262,107 @@ public class GameHttpServer {
     }
 
     private Map<String, Object> buildStateDto(GameSession session, String message) {
-        GameState state = session.getGameState();
         Map<String, Object> dto = new LinkedHashMap<>();
         dto.put("message", message);
-        dto.put("activePlayer", state.getActivePlayerIndex());
-        dto.put("isGameOver", state.isGameOver());
-        dto.put("winner", state.getWinnerId());
-        dto.put("winningRole", state.getWinningRole() != null ? state.getWinningRole().getDescription() : null);
-        dto.put("isHumanWinner", state.isPlayerWinner(0));
-        dto.put("landlordId", state.getLandlordId());
+        dto.put("stage", session.getStage().name());
+        dto.put("currentBidder", session.getCurrentBidder());
+        dto.put("bidActions", List.of(session.getBidActions()));
+        dto.put("landlordId", session.getLandlordId());
+        dto.put("bottomCardsRevealed", session.isBottomCardsRevealed());
 
         // 3张底牌
         List<String> bottomCards = new ArrayList<>();
-        for (Rank r : state.getBottomCards()) {
-            bottomCards.add(r.getSymbol());
+        if (session.isBottomCardsRevealed()) {
+            for (Rank r : session.getBottomCards()) {
+                bottomCards.add(r.getSymbol());
+            }
         }
         dto.put("bottomCards", bottomCards);
-
-        // 各家角色
-        String[] roles = new String[3];
-        for (int i = 0; i < 3; i++) {
-            roles[i] = state.getPlayer(i).getRole().getDescription();
-        }
-        dto.put("roles", roles);
-
-        // 玩家 0 (真人) 的手牌
-        List<String> humanHand = new ArrayList<>();
-        for (Rank r : state.getPlayer(0).getHand().getCards()) {
-            humanHand.add(r.getSymbol());
-        }
-        dto.put("humanHand", humanHand);
 
         // 各家剩余牌数
         int[] counts = new int[3];
         for (int i = 0; i < 3; i++) {
-            counts[i] = state.getPlayer(i).getCardCount();
+            counts[i] = session.getPlayerHand(i).getTotalCards();
         }
         dto.put("cardCounts", counts);
 
-        // 桌面最新出牌
-        Move lastMove = state.getLastMove();
-        if (lastMove != null && !lastMove.isPass()) {
-            Map<String, Object> lastMoveMap = new HashMap<>();
-            lastMoveMap.put("playerId", state.getLastMovePlayerId());
-            lastMoveMap.put("type", lastMove.getType().getDescription());
-            List<String> cards = new ArrayList<>();
-            for (Rank r : lastMove.getCards()) {
-                cards.add(r.getSymbol());
+        // 玩家 0 (真人) 的手牌
+        List<String> humanHand = new ArrayList<>();
+        for (Rank r : session.getPlayerHand(0).getCards()) {
+            humanHand.add(r.getSymbol());
+        }
+        dto.put("humanHand", humanHand);
+
+        // 各家身份角色
+        String[] roles = new String[3];
+        if (session.getStage() == GameSession.Stage.BIDDING) {
+            for (int i = 0; i < 3; i++) {
+                roles[i] = "待定";
             }
-            lastMoveMap.put("cards", cards);
-            dto.put("lastMove", lastMoveMap);
+        } else if (session.getGameState() != null) {
+            for (int i = 0; i < 3; i++) {
+                roles[i] = session.getGameState().getPlayer(i).getRole().getDescription();
+            }
+        }
+        dto.put("roles", roles);
+
+        // 出牌对战阶段的信息
+        GameState state = session.getGameState();
+        if (state != null) {
+            dto.put("activePlayer", state.getActivePlayerIndex());
+            dto.put("isGameOver", state.isGameOver());
+            dto.put("winner", state.getWinnerId());
+            dto.put("winningRole", state.getWinningRole() != null ? state.getWinningRole().getDescription() : null);
+            dto.put("isHumanWinner", state.isPlayerWinner(0));
+
+            // 桌面最新出牌
+            Move lastMove = state.getLastMove();
+            if (lastMove != null && !lastMove.isPass()) {
+                Map<String, Object> lastMoveMap = new HashMap<>();
+                lastMoveMap.put("playerId", state.getLastMovePlayerId());
+                lastMoveMap.put("type", lastMove.getType().getDescription());
+                List<String> cards = new ArrayList<>();
+                for (Rank r : lastMove.getCards()) {
+                    cards.add(r.getSymbol());
+                }
+                lastMoveMap.put("cards", cards);
+                dto.put("lastMove", lastMoveMap);
+            } else {
+                dto.put("lastMove", null);
+            }
+
+            // 真人是否可以不出
+            List<Move> legalMoves = state.getLegalMoves();
+            boolean canPass = legalMoves.stream().anyMatch(Move::isPass);
+            dto.put("canPass", canPass);
+
+            // 记牌器 (3..17，包括大王小王)
+            Map<String, Integer> playedStats = new LinkedHashMap<>();
+            for (int v = 3; v <= 17; v++) {
+                playedStats.put(Rank.fromValue(v).getSymbol(), 0);
+            }
+            for (Move m : state.getMoveHistory()) {
+                if (!m.isPass()) {
+                    for (Rank r : m.getCards()) {
+                        playedStats.put(r.getSymbol(), playedStats.get(r.getSymbol()) + 1);
+                    }
+                }
+            }
+            dto.put("playedStats", playedStats);
         } else {
+            dto.put("activePlayer", session.getCurrentBidder());
+            dto.put("isGameOver", false);
+            dto.put("winner", -1);
+            dto.put("winningRole", null);
+            dto.put("isHumanWinner", false);
             dto.put("lastMove", null);
+            dto.put("canPass", false);
+
+            Map<String, Integer> playedStats = new LinkedHashMap<>();
+            for (int v = 3; v <= 17; v++) {
+                playedStats.put(Rank.fromValue(v).getSymbol(), 0);
+            }
+            dto.put("playedStats", playedStats);
         }
 
         // 3位玩家各自面前展示的最新动作 (出牌或不出/PASS)
@@ -309,44 +387,42 @@ public class GameHttpServer {
         }
         dto.put("playerActions", playerActions);
 
-        // 真人是否可以不出
-        List<Move> legalMoves = state.getLegalMoves();
-        boolean canPass = legalMoves.stream().anyMatch(Move::isPass);
-        dto.put("canPass", canPass);
-
-        // 记牌器 (3..17，包括大王小王)
-        Map<String, Integer> playedStats = new LinkedHashMap<>();
-        for (int v = 3; v <= 17; v++) {
-            playedStats.put(Rank.fromValue(v).getSymbol(), 0);
-        }
-        for (Move m : state.getMoveHistory()) {
-            if (!m.isPass()) {
-                for (Rank r : m.getCards()) {
-                    playedStats.put(r.getSymbol(), playedStats.get(r.getSymbol()) + 1);
-                }
-            }
-        }
-        dto.put("playedStats", playedStats);
-
-        // AI 思考推演信息 (最近一次 P1 / P2 的决策分析)
+        // AI 思考推演信息
         Map<String, Object> aiThoughtsDto = new HashMap<>();
-        for (Map.Entry<Integer, PimcAiPlayer.DecisionResult> e : session.getLastAiThoughts().entrySet()) {
-            PimcAiPlayer.DecisionResult res = e.getValue();
-            List<Map<String, Object>> evals = new ArrayList<>();
-            int limit = Math.min(4, res.getEvaluations().size());
-            for (int i = 0; i < limit; i++) {
-                PimcAiPlayer.MoveEvaluation me = res.getEvaluations().get(i);
-                evals.add(Map.of(
-                        "cards", me.getMove().toCardString(),
-                        "visits", me.getTotalVisits(),
-                        "winRate", Math.round(me.getAverageWinRate() * 1000.0) / 10.0
+
+        // 叫牌思考雷达
+        if (session.getStage() == GameSession.Stage.BIDDING) {
+            for (Map.Entry<Integer, BidEvaluator.BidResult> e : session.getLastBidThoughts().entrySet()) {
+                BidEvaluator.BidResult res = e.getValue();
+                aiThoughtsDto.put("p" + e.getKey(), Map.of(
+                        "type", "bid",
+                        "shouldCall", res.shouldCall(),
+                        "winRate", Math.round(res.winRate() * 1000.0) / 10.0,
+                        "timeMs", res.durationMs(),
+                        "sims", res.totalSimulations()
                 ));
             }
-            aiThoughtsDto.put("p" + e.getKey(), Map.of(
-                    "move", res.getSelectedMove().toCardString(),
-                    "timeMs", res.getDurationMillis(),
-                    "evals", evals
-            ));
+        } else {
+            // 出牌思考雷达
+            for (Map.Entry<Integer, PimcAiPlayer.DecisionResult> e : session.getLastAiThoughts().entrySet()) {
+                PimcAiPlayer.DecisionResult res = e.getValue();
+                List<Map<String, Object>> evals = new ArrayList<>();
+                int limit = Math.min(4, res.getEvaluations().size());
+                for (int i = 0; i < limit; i++) {
+                    PimcAiPlayer.MoveEvaluation me = res.getEvaluations().get(i);
+                    evals.add(Map.of(
+                            "cards", me.getMove().toCardString(),
+                            "visits", me.getTotalVisits(),
+                            "winRate", Math.round(me.getAverageWinRate() * 1000.0) / 10.0
+                    ));
+                }
+                aiThoughtsDto.put("p" + e.getKey(), Map.of(
+                        "type", "play",
+                        "move", res.getSelectedMove().toCardString(),
+                        "timeMs", res.getDurationMillis(),
+                        "evals", evals
+                ));
+            }
         }
         dto.put("aiThoughts", aiThoughtsDto);
 

@@ -9,6 +9,8 @@ import com.farmer.model.Rank;
 import com.farmer.rules.Deck;
 import com.farmer.web.GameHttpServer;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -61,20 +63,50 @@ public class Main {
         System.out.println("===============================================================\n");
 
         Random random = new Random();
-        int landlordId = 0; // 地主
-        Deck.DealResult dealResult = Deck.deal(random, landlordId);
+        System.out.println("[阶段 1] 随机洗牌发牌（各 17 张，底牌 3 张盖伏）");
+        List<Rank> deck = Deck.createStandard54Cards();
+        Collections.shuffle(deck, random);
 
-        List<Hand> hands = dealResult.playerHands();
-        List<Rank> bottomCards = dealResult.bottomCards();
-
-        System.out.printf("【底牌 3 张】: %s\n", bottomCards);
+        List<Hand> hands = new ArrayList<>(3);
         for (int i = 0; i < 3; i++) {
-            String roleStr = (i == landlordId) ? "【地主 👑】" : "【农民 🌾】";
-            System.out.printf("  玩家 P%d %s 初始手牌 (%2d张): %s\n",
-                    i, roleStr, hands.get(i).getTotalCards(), hands.get(i).toCardString());
+            Hand h = new Hand();
+            for (int j = 0; j < 17; j++) {
+                h.add(deck.get(i * 17 + j));
+            }
+            hands.add(h);
+            System.out.printf("  玩家 P%d 初始 17 张手牌: %s\n", i, h.toCardString());
         }
-        System.out.println();
 
+        List<Rank> bottomCards = new ArrayList<>(3);
+        for (int i = 51; i < 54; i++) {
+            bottomCards.add(deck.get(i));
+        }
+
+        System.out.println("\n[阶段 2] 叫地主环节 (采用思路二：PIMC 底牌蒙特卡洛采样推演)");
+        int landlordId = -1;
+        for (int i = 0; i < 3; i++) {
+            com.farmer.ai.BidEvaluator.BidResult bidRes = com.farmer.ai.BidEvaluator.evaluate(hands.get(i), 25, 0.50, random);
+            System.out.printf("  🤖 玩家 P%d 评估 17 张手牌 -> 采样 25 次底牌推演地主胜率: %4.1f%% (%d ms) -> %s\n",
+                    i, bidRes.winRate() * 100, bidRes.durationMs(),
+                    bidRes.shouldCall() ? "【👑 叫地主】" : "【🙅 不叫】");
+            if (bidRes.shouldCall()) {
+                landlordId = i;
+                break;
+            }
+        }
+
+        if (landlordId == -1) {
+            System.out.println("  ⚠️ 三位玩家均不叫地主，系统随机指派玩家 P0 为地主。");
+            landlordId = 0;
+        }
+
+        System.out.printf("\n>>> 👑 玩家 P%d 成功叫得地主！翻开底牌: %s\n", landlordId, bottomCards);
+        for (Rank r : bottomCards) {
+            hands.get(landlordId).add(r);
+        }
+        System.out.printf("  地主 P%d 获得底牌后手牌 (20张): %s\n\n", landlordId, hands.get(landlordId).toCardString());
+
+        System.out.println("[阶段 3] 正式对局出牌阶段");
         PimcAiPlayer[] aiPlayers = new PimcAiPlayer[]{
                 new PimcAiPlayer(25, 120),
                 new PimcAiPlayer(25, 120),
