@@ -113,7 +113,24 @@ public class PimcAiPlayer {
         if (legalMoves.size() == 1) {
             Move singleOption = legalMoves.get(0);
             MoveEvaluation eval = new MoveEvaluation(singleOption);
-            eval.record(1, 1.0);
+
+            if (!singleOption.isPass() && singleOption.getCardCount() == publicView.getMyHand().getTotalCards()) {
+                // 确实是直接出完手牌获得完全胜利的动作
+                eval.record(1, 1.0);
+            } else {
+                // 被迫过牌或只有唯一应牌动作：通过极速模拟推演其真实的胜率预估，避免虚假报出 100% 胜率
+                int wins = 0;
+                int sampleK = 15;
+                for (int i = 0; i < sampleK; i++) {
+                    GameState world = Determinizer.determinize(publicView, random);
+                    world.applyMove(singleOption);
+                    FastRolloutPolicy.simulate(world, random);
+                    if (world.isPlayerWinner(myId)) {
+                        wins++;
+                    }
+                }
+                eval.record(sampleK, (double) wins / sampleK);
+            }
             return new DecisionResult(singleOption, List.of(eval), System.currentTimeMillis() - startTime);
         }
 
