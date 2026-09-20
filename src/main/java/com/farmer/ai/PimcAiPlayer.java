@@ -7,7 +7,6 @@ import com.farmer.rules.MoveGenerator;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +35,8 @@ public class PimcAiPlayer {
     }
 
     public PimcAiPlayer() {
-        this(80, 500);
+        // 网页端默认：更多假想世界 + 更深 MCTS（2 核机器上单步会稍慢）
+        this(200, 1500);
     }
 
     public static class MoveEvaluation {
@@ -169,8 +169,19 @@ public class PimcAiPlayer {
         });
 
         List<MoveEvaluation> evalList = new ArrayList<>(evalMap.values());
-        evalList.sort(Comparator.comparingInt(MoveEvaluation::getTotalVisits).reversed()
-                .thenComparing(Comparator.comparingDouble(MoveEvaluation::getAverageWinRate).reversed()));
+        boolean urgent = BombPolicy.isBombUrgent(publicView);
+        boolean hasSafeAlternative = BombPolicy.hasSafeAlternative(legalMoves);
+        evalList.sort((a, b) -> {
+            double scoreA = BombPolicy.adjustedScore(
+                    a.getMove(), a.getTotalVisits(), a.getAverageWinRate(), urgent, hasSafeAlternative);
+            double scoreB = BombPolicy.adjustedScore(
+                    b.getMove(), b.getTotalVisits(), b.getAverageWinRate(), urgent, hasSafeAlternative);
+            int cmp = Double.compare(scoreB, scoreA);
+            if (cmp != 0) {
+                return cmp;
+            }
+            return Double.compare(b.getAverageWinRate(), a.getAverageWinRate());
+        });
 
         Move bestMove = evalList.get(0).getMove();
         long duration = System.currentTimeMillis() - startTime;

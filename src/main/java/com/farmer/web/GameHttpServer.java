@@ -319,6 +319,21 @@ public class GameHttpServer {
             dto.put("winningRole", state.getWinningRole() != null ? state.getWinningRole().getDescription() : null);
             dto.put("isHumanWinner", state.isPlayerWinner(0));
 
+            // 对局结束时摊开各家剩余手牌，供前端展示
+            if (state.isGameOver()) {
+                List<List<String>> revealedHands = new ArrayList<>();
+                for (int i = 0; i < 3; i++) {
+                    List<String> cards = new ArrayList<>();
+                    for (Rank r : session.getPlayerHand(i).getCards()) {
+                        cards.add(r.getSymbol());
+                    }
+                    revealedHands.add(cards);
+                }
+                dto.put("revealedHands", revealedHands);
+            } else {
+                dto.put("revealedHands", null);
+            }
+
             // 桌面最新出牌
             Move lastMove = state.getLastMove();
             if (lastMove != null && !lastMove.isPass()) {
@@ -359,6 +374,7 @@ public class GameHttpServer {
             dto.put("winner", -1);
             dto.put("winningRole", null);
             dto.put("isHumanWinner", false);
+            dto.put("revealedHands", null);
             dto.put("lastMove", null);
             dto.put("canPass", false);
 

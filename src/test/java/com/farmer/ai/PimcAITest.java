@@ -42,6 +42,28 @@ class PimcAITest {
     }
 
     @Test
+    @DisplayName("农民视角确定化：未打出的已知底牌必须落入地主手牌")
+    void testDeterminizerPinsBottomCardsToLandlord() {
+        Random random = new Random(7);
+        int landlordId = 0;
+        Deck.DealResult dealResult = Deck.deal(random, landlordId);
+        GameState state = new GameState(dealResult.playerHands(), landlordId, dealResult.bottomCards());
+
+        // 以农民 P1 视角采样多个世界
+        PublicView farmerView = state.getPublicView(1);
+        for (int i = 0; i < 20; i++) {
+            GameState world = Determinizer.determinize(farmerView, random);
+            Hand landlordHand = world.getPlayer(landlordId).getHand().copy();
+            for (Rank bottom : dealResult.bottomCards()) {
+                assertThat(landlordHand.getCount(bottom.getValue()))
+                        .as("底牌 %s 必须在地主手中", bottom.getSymbol())
+                        .isGreaterThan(0);
+                landlordHand.remove(bottom);
+            }
+        }
+    }
+
+    @Test
     @DisplayName("测试 AI 在仅剩必胜手牌时的决策准确度")
     void testWinningMoveSelection() {
         Hand myHand = Deck.fromCardString("RJ"); // 我只剩一张大王

@@ -168,10 +168,21 @@ public class FastRolloutPolicy {
             return minBeater;
         }
 
-        // C. 炸弹使用决策
+        // C. 炸弹 / 王炸：非紧急坚决不炸（强先验，几乎不再随机早炸）
         if (!bombs.isEmpty()) {
-            // 只有在对手手牌极少 (<= 3 张) 形成绝杀威胁，或者自己即将出完时才果断炸
-            if (lastPlayerCards <= 3 || myCardsCount <= 4 || passMove == null || random.nextDouble() < 0.15) {
+            boolean urgent = BombPolicy.isBombUrgent(state) || passMove == null;
+            if (urgent) {
+                bombs.sort(Comparator.comparingInt(Move::getMainRank));
+                // 同等紧急时优先普通炸弹，把王炸留到最后
+                for (Move b : bombs) {
+                    if (b.isBomb() && !b.isRocket()) {
+                        return b;
+                    }
+                }
+                return bombs.get(0);
+            }
+            // 仅在完全无过牌可选时才可能触及；保留极低探索率以免树搜索完全学不到炸
+            if (passMove == null && random.nextDouble() < 0.02) {
                 bombs.sort(Comparator.comparingInt(Move::getMainRank));
                 return bombs.get(0);
             }
