@@ -73,4 +73,18 @@ class MoveGeneratorTest {
         assertThat(beatMoves).hasSize(1);
         assertThat(beatMoves.get(0).isPass()).isTrue();
     }
+
+    @Test
+    @DisplayName("标准连对测试：腾讯斗地主规则必须至少 3 对 (6张) 才能连，2 对不能连")
+    void testConsecutivePairsRequiresAtLeastThreePairs() {
+        // 只有 2 对：3344
+        Hand twoPairsHand = Deck.fromCardString("3,3,4,4");
+        List<Move> twoPairsMoves = MoveGenerator.generateLegalMoves(twoPairsHand, null, 0);
+        assertThat(twoPairsMoves.stream().noneMatch(m -> m.getType() == CardType.CONSECUTIVE_PAIRS)).isTrue();
+
+        // 拥有 3 对：334455
+        Hand threePairsHand = Deck.fromCardString("3,3,4,4,5,5");
+        List<Move> threePairsMoves = MoveGenerator.generateLegalMoves(threePairsHand, null, 0);
+        assertThat(threePairsMoves.stream().anyMatch(m -> m.getType() == CardType.CONSECUTIVE_PAIRS && m.getCardCount() == 6)).isTrue();
+    }
 }

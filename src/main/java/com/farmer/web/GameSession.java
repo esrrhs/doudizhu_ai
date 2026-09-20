@@ -4,6 +4,7 @@ import com.farmer.ai.BidEvaluator;
 import com.farmer.ai.PimcAiPlayer;
 import com.farmer.game.GameState;
 import com.farmer.game.PublicView;
+import com.farmer.model.CardType;
 import com.farmer.model.Hand;
 import com.farmer.model.Move;
 import com.farmer.model.Rank;
@@ -13,6 +14,7 @@ import com.farmer.rules.Deck;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +46,6 @@ public class GameSession {
     private GameState gameState;
     private final PimcAiPlayer aiPlayer1;
     private final PimcAiPlayer aiPlayer2;
-    private final PimcAiPlayer hintAi;
     private final Map<Integer, PimcAiPlayer.DecisionResult> lastAiThoughts = new HashMap<>();
     private final List<String> eventLogs = new ArrayList<>();
     private final Move[] playerLastActions = new Move[3];
@@ -53,7 +54,6 @@ public class GameSession {
     public GameSession() {
         this.aiPlayer1 = new PimcAiPlayer(80, 500, random);
         this.aiPlayer2 = new PimcAiPlayer(80, 500, random);
-        this.hintAi = new PimcAiPlayer(60, 400, random);
         // 默认进入互动式叫地主流程 (随机首叫玩家)
         startBiddingGame(-1);
     }
@@ -390,9 +390,96 @@ public class GameSession {
         if (stage != Stage.PLAYING || gameState == null || gameState.isGameOver() || gameState.getActivePlayerIndex() != 0) {
             return null;
         }
-        PublicView view = gameState.getPublicView(0);
-        PimcAiPlayer.DecisionResult result = hintAi.decide(view);
-        return result.getSelectedMove();
+        List<Move> legalMoves = gameState.getLegalMoves();
+        if (legalMoves.isEmpty()) {
+            return null;
+        }
+
+        Move lastMove = gameState.getLastMove();
+        boolean isLead = (lastMove == null || lastMove.isPass());
+
+        if (isLead) {
+            // 主动出牌：快速找出合适的起手牌型（长结构牌型或散牌）
+            List<Move> nonBombs = new ArrayList<>();
+            List<Move> bombs = new ArrayList<>();
+            for (Move m : legalMoves) {
+                if (m.isBomb() || m.isRocket()) {
+                    bombs.add(m);
+                } else if (!m.isPass()) {
+                    nonBombs.add(m);
+                }
+            }
+
+            if (!nonBombs.isEmpty()) {
+                // 优先长结构牌（顺子、连对、飞机、三带一/二）
+                List<Move> structures = nonBombs.stream()
+                        .filter(m -> m.getType() == CardType.STRAIGHT
+                                || m.getType() == CardType.CONSECUTIVE_PAIRS
+                                || m.getType() == CardType.AIRPLANE
+                                || m.getType() == CardType.AIRPLANE_PLUS_SINGLES
+                                || m.getType() == CardType.AIRPLANE_PLUS_PAIRS
+                                || m.getType() == CardType.TRIPLE_PLUS_ONE
+                                || m.getType() == CardType.TRIPLE_PLUS_PAIR)
+                        .sorted(Comparator.comparingInt(Move::getMainRank))
+                        .toList();
+                if (!structures.isEmpty()) {
+                    return structures.get(0);
+                }
+
+                // 三张
+                List<Move> trios = nonBombs.stream()
+                        .filter(m -> m.getType() == CardType.TRIPLE)
+                        .sorted(Comparator.comparingInt(Move::getMainRank))
+                        .toList();
+                if (!trios.isEmpty()) {
+                    return trios.get(0);
+                }
+
+                // 低点数散牌 (保留 2 和王)
+                List<Move> smallMoves = nonBombs.stream()
+                        .filter(m -> m.getMainRank() < Rank.TWO.getValue())
+                        .sorted(Comparator.comparingInt(Move::getMainRank))
+                        .toList();
+                if (!smallMoves.isEmpty()) {
+                    return smallMoves.get(0);
+                }
+
+                nonBombs.sort(Comparator.comparingInt(Move::getMainRank));
+                return nonBombs.get(0);
+            } else if (!bombs.isEmpty()) {
+                bombs.sort(Comparator.comparingInt(Move::getMainRank));
+                return bombs.get(0);
+            }
+            return legalMoves.get(0);
+        } else {
+            // 被动接牌：快速寻找能接得上的最小合法牌
+            List<Move> beaters = new ArrayList<>();
+            List<Move> bombs = new ArrayList<>();
+            Move passMove = null;
+
+            for (Move m : legalMoves) {
+                if (m.isPass()) {
+                    passMove = m;
+                } else if (m.isBomb() || m.isRocket()) {
+                    bombs.add(m);
+                } else {
+                    beaters.add(m);
+                }
+            }
+
+            if (!beaters.isEmpty()) {
+                beaters.sort(Comparator.comparingInt(Move::getMainRank));
+                return beaters.get(0);
+            }
+
+            // 无普通牌可压，若有炸弹
+            if (!bombs.isEmpty()) {
+                bombs.sort(Comparator.comparingInt(Move::getMainRank));
+                return bombs.get(0);
+            }
+
+            return (passMove != null) ? passMove : legalMoves.get(0);
+        }
     }
 
     private void announceWinner() {

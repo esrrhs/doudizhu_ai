@@ -11,7 +11,7 @@ public enum CardType {
     TRIPLE_PLUS_ONE("三带一", 4),
     TRIPLE_PLUS_PAIR("三带二", 5),
     STRAIGHT("顺子", 5),
-    CONSECUTIVE_PAIRS("连对", 4),
+    CONSECUTIVE_PAIRS("连对", 6),
     AIRPLANE("飞机不带", 6),
     AIRPLANE_PLUS_SINGLES("飞机带单", 8),
     AIRPLANE_PLUS_PAIRS("飞机带对", 10),

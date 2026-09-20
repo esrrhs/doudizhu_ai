@@ -62,6 +62,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const p0Avatar = document.getElementById("p0-avatar");
     const p1Avatar = document.getElementById("p1-avatar");
     const p2Avatar = document.getElementById("p2-avatar");
+    const p1Mood = document.getElementById("p1-mood");
+    const p2Mood = document.getElementById("p2-mood");
+    const p1Speech = document.getElementById("p1-speech");
+    const p2Speech = document.getElementById("p2-speech");
 
     const p1ThoughtPopover = document.getElementById("p1-thought-popover");
     const p1PopoverTime = document.getElementById("p1-popover-time");
@@ -235,6 +239,7 @@ document.addEventListener("DOMContentLoaded", () => {
         p2CardCount.textContent = state.cardCounts[2];
 
         updateRoleBadges(state.roles, state.landlordId, state.stage);
+        updateAiExpressions(state);
 
         // 渲染 3 张底牌 (盖牌或亮牌)
         renderBottomCards(state.bottomCards, state.bottomCardsRevealed);
@@ -343,6 +348,99 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (avatar) avatar.textContent = isLandlord ? "🤠" : "🧑‍🌾";
             }
         }
+    }
+
+    let speechTimeouts = {};
+    let lastPlayerActionSnapshots = ["", "", ""];
+    let lastBidActionSnapshots = ["", "", ""];
+
+    function triggerSpeechBubble(playerId, text, level) {
+        const speechEl = (playerId === 1) ? p1Speech : p2Speech;
+        if (!speechEl) return;
+        speechEl.textContent = text;
+        speechEl.className = `mood-speech-bubble ${level}`;
+        speechEl.classList.remove("hidden");
+
+        if (speechTimeouts[playerId]) {
+            clearTimeout(speechTimeouts[playerId]);
+        }
+        speechTimeouts[playerId] = setTimeout(() => {
+            speechEl.classList.add("hidden");
+        }, 3000);
+    }
+
+    function updateAiExpressions(state) {
+        if (!state) return;
+        const aiList = [
+            { id: 1, avatarEl: p1Avatar, moodEl: p1Mood, thoughtKey: "p1" },
+            { id: 2, avatarEl: p2Avatar, moodEl: p2Mood, thoughtKey: "p2" }
+        ];
+
+        aiList.forEach(({ id, avatarEl, moodEl, thoughtKey }) => {
+            if (!avatarEl || !moodEl) return;
+            const isLandlord = (state.landlordId === id);
+
+            const thought = (state.aiThoughts && state.aiThoughts[thoughtKey]) ? state.aiThoughts[thoughtKey] : null;
+            if (!thought) {
+                moodEl.classList.add("hidden");
+                avatarEl.className = "player-avatar";
+                return;
+            }
+
+            let winRate = null;
+            if (thought.type === "bid") {
+                winRate = thought.winRate;
+            } else if (thought.type === "play" && thought.evals && thought.evals.length > 0) {
+                winRate = thought.evals[0].winRate;
+            }
+
+            if (winRate === null || winRate === undefined) {
+                moodEl.classList.add("hidden");
+                avatarEl.className = "player-avatar";
+                return;
+            }
+
+            let moodBadge = "";
+            let level = "normal";
+            let speechLine = "";
+
+            if (winRate >= 70.0) {
+                level = "high";
+                moodBadge = isLandlord ? "😎" : "🥳";
+                speechLine = isLandlord ? `🔥 胜券在握！(${winRate}%)` : `🌾 稳稳拿下！(${winRate}%)`;
+                avatarEl.className = "player-avatar avatar-cheer";
+            } else if (winRate <= 35.0) {
+                level = "low";
+                moodBadge = isLandlord ? "😰" : "😭";
+                speechLine = isLandlord ? `💦 局势危急...(${winRate}%)` : `😭 顶不住啦！(${winRate}%)`;
+                avatarEl.className = "player-avatar avatar-panic";
+            } else {
+                level = "normal";
+                moodBadge = isLandlord ? "😏" : "🧐";
+                speechLine = `🤔 局势焦灼 (${winRate}%)`;
+                avatarEl.className = "player-avatar";
+            }
+
+            moodEl.textContent = moodBadge;
+            moodEl.className = `avatar-mood-badge ${level}`;
+            moodEl.classList.remove("hidden");
+
+            // 检测该玩家是否有最新动作变化 (出牌或叫牌)，若有则触发表情冒泡动画
+            const currentPlayAct = (state.playerActions && state.playerActions[id])
+                ? JSON.stringify(state.playerActions[id]) : "";
+            const currentBidAct = (state.bidActions && state.bidActions[id])
+                ? String(state.bidActions[id]) : "";
+
+            const isNewPlay = (currentPlayAct !== "" && currentPlayAct !== lastPlayerActionSnapshots[id]);
+            const isNewBid = (currentBidAct !== "" && currentBidAct !== lastBidActionSnapshots[id]);
+
+            if (isNewPlay || isNewBid) {
+                triggerSpeechBubble(id, speechLine, level);
+            }
+
+            lastPlayerActionSnapshots[id] = currentPlayAct;
+            lastBidActionSnapshots[id] = currentBidAct;
+        });
     }
 
     function renderBottomCards(bottomCards, isRevealed) {

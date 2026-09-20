@@ -84,7 +84,7 @@ public class MoveGenerator {
         // 6. 顺子 (5~12张，点数 3..14 即 3..A，不能包含 2 和大小王)
         generateStraights(hand, 0, -1, playerId, result);
 
-        // 7. 连对 (至少2连对，点数 3..14 即 3..A)
+        // 7. 连对 (至少3连对，点数 3..14 即 3..A)
         generateConsecutivePairs(hand, 0, -1, playerId, result);
 
         // 8. 飞机不带 (2~4连三张，点数 3..14 即 3..A)
@@ -214,7 +214,10 @@ public class MoveGenerator {
     }
 
     private static void generateConsecutivePairs(Hand hand, int minRank, int requiredCardCount, int playerId, List<Move> result) {
-        int minPairs = (requiredCardCount > 0) ? requiredCardCount / 2 : 2;
+        if (requiredCardCount > 0 && requiredCardCount < 6) {
+            return;
+        }
+        int minPairs = (requiredCardCount > 0) ? requiredCardCount / 2 : 3;
         int maxPairs = (requiredCardCount > 0) ? requiredCardCount / 2 : 10;
 
         for (int pairs = minPairs; pairs <= maxPairs; pairs++) {
