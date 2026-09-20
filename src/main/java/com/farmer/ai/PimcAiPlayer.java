@@ -110,6 +110,15 @@ public class PimcAiPlayer {
             return new DecisionResult(Move.pass(myId), List.of(), 0);
         }
 
+        // 0. 若手中存在可直接清空手牌获胜的合法走法，直接执行必胜斩杀
+        for (Move m : legalMoves) {
+            if (!m.isPass() && m.getCardCount() == publicView.getMyHand().getTotalCards()) {
+                MoveEvaluation eval = new MoveEvaluation(m);
+                eval.record(100, 1.0);
+                return new DecisionResult(m, List.of(eval), System.currentTimeMillis() - startTime);
+            }
+        }
+
         if (legalMoves.size() == 1) {
             Move singleOption = legalMoves.get(0);
             MoveEvaluation eval = new MoveEvaluation(singleOption);

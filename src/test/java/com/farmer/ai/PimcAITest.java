@@ -57,4 +57,48 @@ class PimcAITest {
         // 必须直接出 RJ 获胜
         assertThat(result.getSelectedMove().toCardString()).isEqualTo("RJ");
     }
+
+    @Test
+    @DisplayName("测试被迫出牌或过牌时不虚假汇报 100% 胜率")
+    void testHonestWinRateEstimation() {
+        // 我方处于劣势只剩 3, 对手剩对 2，我方出 3 不能保证必胜，绝不能谎报 100%
+        Hand myHand = Deck.fromCardString("3");
+        Hand opp1 = Deck.fromCardString("5,2,2");
+        Hand opp2 = Deck.fromCardString("A,A");
+
+        GameState state = new GameState(List.of(myHand, opp1, opp2), 1, List.of(Rank.THREE, Rank.FOUR, Rank.FIVE));
+        // 玩家 1 出 5
+        state.applyMove(com.farmer.model.Move.of(com.farmer.model.CardType.SINGLE, Rank.FIVE.getValue(), List.of(Rank.FIVE), 1));
+        // 玩家 2 出 A
+        state.applyMove(com.farmer.model.Move.of(com.farmer.model.CardType.SINGLE, Rank.ACE.getValue(), List.of(Rank.ACE), 2));
+        // 此时轮到玩家 0 (我方)，只能 PASS
+        PublicView view = state.getPublicView(0);
+
+        PimcAiPlayer ai = new PimcAiPlayer(5, 50);
+        PimcAiPlayer.DecisionResult result = ai.decide(view);
+
+        // 只能 PASS，且胜率不能是 100%
+        assertThat(result.getSelectedMove().isPass()).isTrue();
+        assertThat(result.getEvaluations().get(0).getAverageWinRate()).isLessThan(1.0);
+    }
+
+    @Test
+    @DisplayName("测试首出牌时优先出小散牌，保留控制大牌 (2/王) 用于回手")
+    void testConserveControlCardsOnLead() {
+        // 我方持牌: 3, 4, 2，轮到我方自由领出 (Lead)
+        // 关键博弈：如果先出 2，手中剩下 3, 4 两张死单，再出一张 3 后因无大牌回手而必输；
+        // 必须先出 3 引出对手牌，再用 2 夺回牌权打出 4 获胜！
+        Hand myHand = Deck.fromCardString("3,4,2");
+        Hand opp1 = Deck.fromCardString("5,6,7");
+        Hand opp2 = Deck.fromCardString("8,9,10");
+
+        GameState state = new GameState(List.of(myHand, opp1, opp2), 0, List.of(Rank.THREE, Rank.FOUR, Rank.FIVE));
+        PublicView view = state.getPublicView(0);
+
+        PimcAiPlayer ai = new PimcAiPlayer(15, 100);
+        PimcAiPlayer.DecisionResult result = ai.decide(view);
+
+        // 首出必须是小牌 3 或 4，绝不能把大牌 2 率先浪费
+        assertThat(result.getSelectedMove().toCardString()).isIn("3", "4");
+    }
 }
