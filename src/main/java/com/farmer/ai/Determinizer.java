@@ -17,24 +17,22 @@ import java.util.Random;
  * 再按公开剩余张数分给两名对手。若底牌已揭晓且观察者不是地主，
  * 尚未打出的底牌必须落入地主手牌。
  * <p>
- * 采样后用过牌历史做一致性剪枝：例如对方对单牌选择 PASS，
- * 则不应再给他「落单的小/中单」这类明显该管的牌。
+ * 采样后给出过牌推断似然，供上层按概率分配搜索算力：
+ * 符合推断的世界优先多算，低概率世界少算但仍会跑到。
  */
 public class Determinizer {
 
-    private static final int MAX_RESAMPLE_ATTEMPTS = 80;
-
     public static GameState determinize(PublicView publicView, Random random) {
-        GameState best = null;
-        for (int attempt = 0; attempt < MAX_RESAMPLE_ATTEMPTS; attempt++) {
-            List<Hand> hands = sampleHands(publicView, random);
-            if (PassInference.isWorldConsistent(publicView, hands)) {
-                return buildState(publicView, hands);
-            }
-            best = buildState(publicView, hands);
-        }
-        // 约束过紧时退回最后一次采样，避免卡死
-        return best;
+        return sample(publicView, random).state();
+    }
+
+    public record SampledWorld(GameState state, double likelihood) {
+    }
+
+    public static SampledWorld sample(PublicView publicView, Random random) {
+        List<Hand> hands = sampleHands(publicView, random);
+        double likelihood = PassInference.likelihood(publicView, hands);
+        return new SampledWorld(buildState(publicView, hands), likelihood);
     }
 
     private static List<Hand> sampleHands(PublicView publicView, Random random) {

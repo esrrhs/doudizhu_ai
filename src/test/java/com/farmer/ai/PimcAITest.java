@@ -42,9 +42,8 @@ class PimcAITest {
     }
 
     @Test
-    @DisplayName("过牌推断：对方对单 5 PASS 后，假想世界不应再给他落单的 6/7/8")
-    void testPassInferenceRejectsCheapSingletonBeater() {
-        Random random = new Random(123);
+    @DisplayName("过牌推断是优先级：有落单小牌可压的世界似然更低，但仍会分到搜索预算")
+    void testPassInferenceIsPriorityNotHardReject() {
         Hand p0 = Deck.fromCardString("5,6,7,8,9,10,J,Q,K,A,2,BJ,RJ,3,4,8,9,10,J,Q");
         Hand p1 = Deck.fromCardString("3,4,6,7,8,9,10,J,Q,K,A,2,3,4,5,6,7");
         Hand p2 = Deck.fromCardString("3,4,5,6,7,8,9,10,J,Q,K,A,3,4,5,6,7");
@@ -52,25 +51,21 @@ class PimcAITest {
         state.applyMove(com.farmer.model.Move.of(
                 com.farmer.model.CardType.SINGLE, Rank.FIVE.getValue(), List.of(Rank.FIVE), 0));
         state.applyMove(com.farmer.model.Move.pass(1));
-
         PublicView view = state.getPublicView(0);
-        int violations = 0;
-        int samples = 50;
-        for (int i = 0; i < samples; i++) {
-            GameState world = Determinizer.determinize(view, random);
-            Hand p1Hand = world.getPlayer(1).getHand();
-            boolean bad = false;
-            for (int v = Rank.SIX.getValue(); v <= Rank.EIGHT.getValue(); v++) {
-                if (p1Hand.getCount(v) == 1) {
-                    bad = true;
-                    break;
-                }
-            }
-            if (bad) {
-                violations++;
-            }
-        }
-        assertThat(violations).isLessThan(samples / 5);
+
+        Hand p1Cheap = Deck.fromCardString("6,9,9,10,10,J,J,Q,Q,K,K,A,A,2,3,3,4");
+        Hand p1Clean = Deck.fromCardString("9,9,10,10,J,J,Q,Q,K,K,A,A,2,3,3,4,4");
+        List<Hand> low = List.of(state.getPlayer(0).getHand(), p1Cheap, state.getPlayer(2).getHand());
+        List<Hand> high = List.of(state.getPlayer(0).getHand(), p1Clean, state.getPlayer(2).getHand());
+
+        double lowP = PassInference.likelihood(view, low);
+        double highP = PassInference.likelihood(view, high);
+        assertThat(highP).isGreaterThan(lowP);
+        assertThat(lowP).isGreaterThan(0.0);
+
+        int[] iters = PassInference.allocateSearchIterations(new double[]{highP, lowP}, 1600);
+        assertThat(iters[0]).isGreaterThan(iters[1]);
+        assertThat(iters[1]).isGreaterThan(200);
     }
 
     @Test
