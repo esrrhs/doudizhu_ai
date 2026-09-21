@@ -16,10 +16,28 @@ import java.util.Random;
  * 未知牌池 = 54 张 − 自己手牌 − 场上历史已打出牌；
  * 再按公开剩余张数分给两名对手。若底牌已揭晓且观察者不是地主，
  * 尚未打出的底牌必须落入地主手牌。
+ * <p>
+ * 采样后用过牌历史做一致性剪枝：例如对方对单牌选择 PASS，
+ * 则不应再给他「落单的小/中单」这类明显该管的牌。
  */
 public class Determinizer {
 
+    private static final int MAX_RESAMPLE_ATTEMPTS = 80;
+
     public static GameState determinize(PublicView publicView, Random random) {
+        GameState best = null;
+        for (int attempt = 0; attempt < MAX_RESAMPLE_ATTEMPTS; attempt++) {
+            List<Hand> hands = sampleHands(publicView, random);
+            if (PassInference.isWorldConsistent(publicView, hands)) {
+                return buildState(publicView, hands);
+            }
+            best = buildState(publicView, hands);
+        }
+        // 约束过紧时退回最后一次采样，避免卡死
+        return best;
+    }
+
+    private static List<Hand> sampleHands(PublicView publicView, Random random) {
         int myId = publicView.getViewingPlayerId();
         int landlordId = publicView.getLandlordId();
         List<Rank> unseen = new ArrayList<>(publicView.computeUnseenCards());
@@ -29,10 +47,8 @@ public class Determinizer {
         hands.add(new Hand());
         hands.add(new Hand());
 
-        // 还原自己的真实手牌
         hands.set(myId, publicView.getMyHand().copy());
 
-        // 已知底牌中尚未打出的，必须归地主（观察者是地主时已在自己手牌中）
         List<Rank> forcedToLandlord = new ArrayList<>();
         if (myId != landlordId) {
             for (Rank r : publicView.getBottomCards()) {
@@ -40,15 +56,12 @@ public class Determinizer {
                     forcedToLandlord.add(r);
                 }
             }
-            // 公开信息自洽时：未打出底牌数 ≤ 地主剩余张数。
-            // 否则（如测试桩数据）放弃强制，退回自由采样，避免污染世界。
             if (forcedToLandlord.size() > publicView.getCardCount(landlordId)) {
                 unseen.addAll(forcedToLandlord);
                 forcedToLandlord.clear();
             }
         }
 
-        // 先给地主发牌（含强制底牌），再给另一名对手，避免底牌被先分走
         List<Integer> dealOrder = new ArrayList<>(2);
         if (myId != landlordId) {
             dealOrder.add(landlordId);
@@ -80,10 +93,11 @@ public class Determinizer {
                 oppHand.add(unseen.get(unseenIndex++));
             }
         }
+        return hands;
+    }
 
-        GameState simulatedState = new GameState(hands, landlordId, publicView.getBottomCards());
-
-        // 恢复桌面状态
+    private static GameState buildState(PublicView publicView, List<Hand> hands) {
+        GameState simulatedState = new GameState(hands, publicView.getLandlordId(), publicView.getBottomCards());
         try {
             var lastMoveField = GameState.class.getDeclaredField("lastMove");
             lastMoveField.setAccessible(true);
@@ -103,7 +117,6 @@ public class Determinizer {
         } catch (Exception e) {
             throw new RuntimeException("Failed to reconstruct trick state in determinization", e);
         }
-
         return simulatedState;
     }
 }

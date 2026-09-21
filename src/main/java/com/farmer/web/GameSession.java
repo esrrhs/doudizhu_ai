@@ -52,8 +52,8 @@ public class GameSession {
     private final Random random = new Random();
 
     public GameSession() {
-        this.aiPlayer1 = new PimcAiPlayer(200, 1500, random);
-        this.aiPlayer2 = new PimcAiPlayer(200, 1500, random);
+        this.aiPlayer1 = new PimcAiPlayer(240, 1600, random);
+        this.aiPlayer2 = new PimcAiPlayer(240, 1600, random);
         // 默认进入互动式叫地主流程 (随机首叫玩家)
         startBiddingGame(-1);
     }

@@ -42,6 +42,38 @@ class PimcAITest {
     }
 
     @Test
+    @DisplayName("过牌推断：对方对单 5 PASS 后，假想世界不应再给他落单的 6/7/8")
+    void testPassInferenceRejectsCheapSingletonBeater() {
+        Random random = new Random(123);
+        Hand p0 = Deck.fromCardString("5,6,7,8,9,10,J,Q,K,A,2,BJ,RJ,3,4,8,9,10,J,Q");
+        Hand p1 = Deck.fromCardString("3,4,6,7,8,9,10,J,Q,K,A,2,3,4,5,6,7");
+        Hand p2 = Deck.fromCardString("3,4,5,6,7,8,9,10,J,Q,K,A,3,4,5,6,7");
+        GameState state = new GameState(List.of(p0, p1, p2), 0, List.of(Rank.THREE, Rank.FOUR, Rank.FIVE));
+        state.applyMove(com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.FIVE.getValue(), List.of(Rank.FIVE), 0));
+        state.applyMove(com.farmer.model.Move.pass(1));
+
+        PublicView view = state.getPublicView(0);
+        int violations = 0;
+        int samples = 50;
+        for (int i = 0; i < samples; i++) {
+            GameState world = Determinizer.determinize(view, random);
+            Hand p1Hand = world.getPlayer(1).getHand();
+            boolean bad = false;
+            for (int v = Rank.SIX.getValue(); v <= Rank.EIGHT.getValue(); v++) {
+                if (p1Hand.getCount(v) == 1) {
+                    bad = true;
+                    break;
+                }
+            }
+            if (bad) {
+                violations++;
+            }
+        }
+        assertThat(violations).isLessThan(samples / 5);
+    }
+
+    @Test
     @DisplayName("农民视角确定化：未打出的已知底牌必须落入地主手牌")
     void testDeterminizerPinsBottomCardsToLandlord() {
         Random random = new Random(7);

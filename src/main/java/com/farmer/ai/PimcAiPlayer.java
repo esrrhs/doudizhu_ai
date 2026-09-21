@@ -36,7 +36,7 @@ public class PimcAiPlayer {
 
     public PimcAiPlayer() {
         // 网页端默认：更多假想世界 + 更深 MCTS（2 核机器上单步会稍慢）
-        this(200, 1500);
+        this(240, 1600);
     }
 
     public static class MoveEvaluation {
