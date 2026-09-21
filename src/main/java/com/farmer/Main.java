@@ -1,6 +1,7 @@
 package com.farmer;
 
 import com.farmer.ai.PimcAiPlayer;
+import com.farmer.ai.SelfPlayRunner;
 import com.farmer.game.GameState;
 import com.farmer.game.PublicView;
 import com.farmer.model.Hand;
@@ -21,20 +22,30 @@ import java.util.Random;
  */
 public class Main {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         boolean runCli = false;
+        boolean runSelfPlay = false;
         int port = 8080;
+        java.util.List<String> selfPlayArgs = new java.util.ArrayList<>();
 
         for (String arg : args) {
             if ("--cli".equalsIgnoreCase(arg)) {
                 runCli = true;
+            } else if ("--selfplay".equalsIgnoreCase(arg)) {
+                runSelfPlay = true;
             } else if (arg.startsWith("--port=")) {
                 port = Integer.parseInt(arg.substring("--port=".length()));
+            } else if (arg.startsWith("--games=") || arg.startsWith("--worlds=")
+                    || arg.startsWith("--iters=") || arg.startsWith("--seed=")
+                    || arg.startsWith("--out=")) {
+                selfPlayArgs.add(arg);
             }
         }
 
         if (runCli) {
             runCliSimulation();
+        } else if (runSelfPlay) {
+            SelfPlayRunner.main(selfPlayArgs.toArray(new String[0]));
         } else {
             startWebServer(port);
         }

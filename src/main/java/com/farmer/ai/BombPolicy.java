@@ -156,10 +156,21 @@ public final class BombPolicy {
     }
 
     /**
-     * 决策层综合分：非紧急时对炸弹/王炸施加强先验惩罚。
+     * 决策层综合分：非紧急时对炸弹/王炸、以及拆对留死单的着法施加强先验惩罚。
      */
     public static double adjustedScore(Move move, int visits, double winRate, boolean urgent,
                                       boolean hasSafeAlternative) {
+        return adjustedScore(move, visits, winRate, urgent, hasSafeAlternative, null);
+    }
+
+    public static double adjustedScore(Move move, int visits, double winRate, boolean urgent,
+                                      boolean hasSafeAlternative, com.farmer.model.Hand hand) {
+        return adjustedScore(move, visits, winRate, urgent, hasSafeAlternative, hand, null);
+    }
+
+    public static double adjustedScore(Move move, int visits, double winRate, boolean urgent,
+                                      boolean hasSafeAlternative, com.farmer.model.Hand hand,
+                                      Move lastMove) {
         double adjVisits = visits;
         double adjWinRate = winRate;
 
@@ -170,6 +181,55 @@ public final class BombPolicy {
             } else {
                 adjWinRate -= BOMB_WINRATE_PENALTY;
                 adjVisits *= BOMB_VISIT_SCALE;
+            }
+        }
+
+        if (hand != null && !urgent && hasSafeAlternative && HandShape.breaksSet(hand, move)) {
+            adjWinRate -= 0.12;
+            adjVisits *= 0.55;
+        }
+        if (hand != null && HandShape.weakSinglesDelta(hand, move) > 0 && !urgent) {
+            adjWinRate -= 0.06 * HandShape.weakSinglesDelta(hand, move);
+        }
+
+        // 有更小同型可压时，惩罚大牌超压（有 9 却出 2）
+        if (hand != null && lastMove != null && !lastMove.isPass() && !move.isPass()
+                && !isBombOrRocket(move) && move.getType() == lastMove.getType()
+                && move.getMainRank() > lastMove.getMainRank() + 2) {
+            boolean hasCheaper = false;
+            for (int v = lastMove.getMainRank() + 1; v < move.getMainRank(); v++) {
+                if (move.getType() == com.farmer.model.CardType.SINGLE
+                        && hand.getCount(v) == 1) {
+                    hasCheaper = true;
+                    break;
+                }
+                if (move.getType() == com.farmer.model.CardType.PAIR && hand.getCount(v) >= 2) {
+                    hasCheaper = true;
+                    break;
+                }
+                if (move.getType() == com.farmer.model.CardType.TRIPLE && hand.getCount(v) >= 3) {
+                    hasCheaper = true;
+                    break;
+                }
+            }
+            if (hasCheaper && !urgent) {
+                adjWinRate -= 0.16;
+                adjVisits *= 0.45;
+            }
+        }
+
+        // 主动回合：严禁早出控场、严禁拆对出单
+        boolean leading = lastMove == null || lastMove.isPass();
+        if (hand != null && leading && !move.isPass() && !urgent) {
+            if (move.getType() == com.farmer.model.CardType.SINGLE
+                    && move.getMainRank() >= com.farmer.model.Rank.TWO.getValue()
+                    && hand.getTotalCards() > 3) {
+                adjWinRate -= 0.18;
+                adjVisits *= 0.35;
+            }
+            if (HandShape.breaksSet(hand, move)) {
+                adjWinRate -= 0.16;
+                adjVisits *= 0.4;
             }
         }
 

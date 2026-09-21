@@ -145,9 +145,29 @@ public class MctsSearcher {
         }
 
         structures.sort(Comparator.comparingInt(Move::getMainRank));
-        normals.sort(Comparator.comparingInt(Move::getMainRank));
         bombs.sort(Comparator.comparingInt(Move::getMainRank));
         clears.sort(Comparator.comparingInt(Move::getMainRank));
+
+        // 普通非炸弹：对子优先于单张
+        List<Move> pairs = new ArrayList<>();
+        List<Move> trueSingles = new ArrayList<>();
+        List<Move> otherNormals = new ArrayList<>();
+        for (Move m : normals) {
+            if (m.getType() == CardType.PAIR) {
+                pairs.add(m);
+            } else if (m.getType() == CardType.SINGLE) {
+                trueSingles.add(m);
+            } else {
+                otherNormals.add(m);
+            }
+        }
+        pairs.sort(Comparator.comparingInt(Move::getMainRank));
+        trueSingles.sort(Comparator.comparingInt(Move::getMainRank));
+        otherNormals.sort(Comparator.comparingInt(Move::getMainRank));
+        normals.clear();
+        normals.addAll(pairs);
+        normals.addAll(trueSingles);
+        normals.addAll(otherNormals);
 
         List<Move> ordered = new ArrayList<>(pool.size());
         addUnique(ordered, clears);

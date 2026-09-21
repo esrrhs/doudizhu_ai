@@ -183,13 +183,16 @@ public class PimcAiPlayer {
         });
 
         List<MoveEvaluation> evalList = new ArrayList<>(evalMap.values());
-        boolean urgent = BombPolicy.isBombUrgent(publicView);
+        boolean urgent = BombPolicy.isBombUrgent(publicView)
+                || HandShape.isDeadScattered(publicView.getMyHand());
         boolean hasSafeAlternative = BombPolicy.hasSafeAlternative(legalMoves);
+        var myHand = publicView.getMyHand();
+        Move lastMove = publicView.getLastMove();
         evalList.sort((a, b) -> {
             double scoreA = BombPolicy.adjustedScore(
-                    a.getMove(), a.getTotalVisits(), a.getAverageWinRate(), urgent, hasSafeAlternative);
+                    a.getMove(), a.getTotalVisits(), a.getAverageWinRate(), urgent, hasSafeAlternative, myHand, lastMove);
             double scoreB = BombPolicy.adjustedScore(
-                    b.getMove(), b.getTotalVisits(), b.getAverageWinRate(), urgent, hasSafeAlternative);
+                    b.getMove(), b.getTotalVisits(), b.getAverageWinRate(), urgent, hasSafeAlternative, myHand, lastMove);
             int cmp = Double.compare(scoreB, scoreA);
             if (cmp != 0) {
                 return cmp;
