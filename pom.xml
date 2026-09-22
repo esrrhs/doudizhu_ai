@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.github.esrrhs</groupId>
-    <artifactId>farmer-ai</artifactId>
+    <artifactId>doudizhu_ai</artifactId>
     <packaging>jar</packaging>
     <version>1.1.0</version>
 
-    <name>farmer-ai</name>
+    <name>doudizhu_ai</name>
     <description>High-performance DouDiZhu (Fight the Landlord) Poker AI using PIMC and Team MCTS.</description>
     <url>https://github.com/esrrhs/farmer_ai</url>
 
@@ -111,7 +111,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.farmer.Main</mainClass>
+                            <mainClass>com.doudizhu.Main</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -123,7 +123,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.0.0</version>
                 <configuration>
-                    <mainClass>com.farmer.Main</mainClass>
+                    <mainClass>com.doudizhu.Main</mainClass>
                 </configuration>
             </plugin>
         </plugins>

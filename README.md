@@ -1,8 +1,8 @@
-# 斗地主 AI (Farmer AI / DouDiZhu AI)
+# 斗地主 AI (doudizhu_ai)
 
 [![License](https://img.shields.io/github/license/esrrhs/farmer_ai)](https://github.com/esrrhs/farmer_ai)
 [![Language](https://img.shields.io/github/languages/top/esrrhs/farmer_ai)](https://github.com/esrrhs/farmer_ai)
-[![Maven Central](https://img.shields.io/maven-central/v/com.github.esrrhs/farmer-ai)](https://central.sonatype.com/artifact/com.github.esrrhs/farmer-ai)
+[![Maven Central](https://img.shields.io/maven-central/v/com.github.esrrhs/doudizhu_ai)](https://central.sonatype.com/artifact/com.github.esrrhs/doudizhu_ai)
 [![Build Status](https://github.com/esrrhs/farmer_ai/actions/workflows/maven.yml/badge.svg?branch=master)](https://github.com/esrrhs/farmer_ai/actions)
 
 基于 **Java 17** 实现的高性能扑克牌游戏“**斗地主**”人工智能引擎与本地网页端对战平台。
@@ -18,14 +18,14 @@
 ```xml
 <dependency>
     <groupId>com.github.esrrhs</groupId>
-    <artifactId>farmer-ai</artifactId>
+    <artifactId>doudizhu_ai</artifactId>
     <version>1.1.0</version>
 </dependency>
 ```
 
 ### Gradle
 ```groovy
-implementation 'com.github.esrrhs:farmer-ai:1.1.0'
+implementation 'com.github.esrrhs:doudizhu_ai:1.1.0'
 ```
 
 ---
@@ -105,11 +105,11 @@ mvn clean test
 ## 📂 项目结构
 
 ```text
-farmer_ai/
+doudizhu_ai/
 ├── pom.xml                                   # Maven 配置 (Java 17, Central Publishing, GPG Signing)
 ├── src/
 │   ├── main/
-│   │   ├── java/com/farmer/
+│   │   ├── java/com/doudizhu/
 │   │   │   ├── model/                        # 领域模型 (Rank, Role, CardType, Move, Hand)
 │   │   │   ├── rules/                        # 规则与牌库 (Deck, MoveGenerator)
 │   │   │   ├── game/                         # 牌局状态机与信息视角 (GameState, Player, PublicView)
