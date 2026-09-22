@@ -1,9 +1,9 @@
 # 斗地主 AI (doudizhu_ai)
 
-[![License](https://img.shields.io/github/license/esrrhs/farmer_ai)](https://github.com/esrrhs/farmer_ai)
-[![Language](https://img.shields.io/github/languages/top/esrrhs/farmer_ai)](https://github.com/esrrhs/farmer_ai)
+[![License](https://img.shields.io/github/license/esrrhs/doudizhu_ai)](https://github.com/esrrhs/doudizhu_ai)
+[![Language](https://img.shields.io/github/languages/top/esrrhs/doudizhu_ai)](https://github.com/esrrhs/doudizhu_ai)
 [![Maven Central](https://img.shields.io/maven-central/v/com.github.esrrhs/doudizhu_ai)](https://central.sonatype.com/artifact/com.github.esrrhs/doudizhu_ai)
-[![Build Status](https://github.com/esrrhs/farmer_ai/actions/workflows/maven.yml/badge.svg?branch=master)](https://github.com/esrrhs/farmer_ai/actions)
+[![Build Status](https://github.com/esrrhs/doudizhu_ai/actions/workflows/maven.yml/badge.svg?branch=master)](https://github.com/esrrhs/doudizhu_ai/actions)
 
 基于 **Java 17** 实现的高性能扑克牌游戏“**斗地主**”人工智能引擎与本地网页端对战平台。
 

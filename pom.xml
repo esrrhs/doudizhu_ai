@@ -11,7 +11,7 @@
 
     <name>doudizhu_ai</name>
     <description>High-performance DouDiZhu (Fight the Landlord) Poker AI using PIMC and Team MCTS.</description>
-    <url>https://github.com/esrrhs/farmer_ai</url>
+    <url>https://github.com/esrrhs/doudizhu_ai</url>
 
     <licenses>
         <license>
@@ -25,14 +25,14 @@
         <developer>
             <name>esrrhs</name>
             <email>esrrhs@163.com</email>
-            <url>https://github.com/esrrhs/farmer_ai</url>
+            <url>https://github.com/esrrhs/doudizhu_ai</url>
         </developer>
     </developers>
 
     <scm>
-        <connection>scm:git:git@github.com:esrrhs/farmer_ai.git</connection>
-        <developerConnection>scm:git:git@github.com:esrrhs/farmer_ai.git</developerConnection>
-        <url>git@github.com:esrrhs/farmer_ai.git</url>
+        <connection>scm:git:git@github.com:esrrhs/doudizhu_ai.git</connection>
+        <developerConnection>scm:git:git@github.com:esrrhs/doudizhu_ai.git</developerConnection>
+        <url>git@github.com:esrrhs/doudizhu_ai.git</url>
     </scm>
 
     <properties>
