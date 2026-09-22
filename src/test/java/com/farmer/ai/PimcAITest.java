@@ -3,6 +3,7 @@ package com.farmer.ai;
 import com.farmer.game.GameState;
 import com.farmer.game.PublicView;
 import com.farmer.model.Hand;
+import com.farmer.model.Move;
 import com.farmer.model.Rank;
 import com.farmer.rules.Deck;
 import org.junit.jupiter.api.DisplayName;
@@ -149,6 +150,195 @@ class PimcAITest {
 
         // 首出必须是小牌 3 或 4，绝不能把大牌 2 率先浪费
         assertThat(result.getSelectedMove().toCardString()).isIn("3", "4");
+    }
+
+    @Test
+    @DisplayName("硬护栏：有 10 可压时禁止用 2 超压（即使搜索更看好 2）")
+    void testHardGuardBlocksControlOvershoot() {
+        Hand hand = Deck.fromCardString("7,8,10,J,K,A,2");
+        Move last = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.NINE.getValue(), List.of(Rank.NINE), 1);
+        Move two = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.TWO.getValue(), List.of(Rank.TWO), 0);
+        Move ten = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.TEN.getValue(), List.of(Rank.TEN), 0);
+        PimcAiPlayer.MoveEvaluation preferTwo = new PimcAiPlayer.MoveEvaluation(two);
+        preferTwo.record(200, 0.95);
+        PimcAiPlayer.MoveEvaluation preferTen = new PimcAiPlayer.MoveEvaluation(ten);
+        preferTen.record(200, 0.40);
+        Move chosen = PimcAiPlayer.selectWithHardGuards(
+                java.util.List.of(preferTwo, preferTen),
+                java.util.List.of(two, ten, com.farmer.model.Move.pass(0)),
+                hand, last, false, false);
+        assertThat(chosen.toCardString()).isEqualTo("10");
+    }
+
+    @Test
+    @DisplayName("硬护栏：主动禁止拆三出单，优先出不拆结构的牌")
+    void testHardGuardBlocksLeadBreakSet() {
+        Hand hand = Deck.fromCardString("3,3,3,4,9,K,A,2");
+        Move break3 = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.THREE.getValue(), List.of(Rank.THREE), 0);
+        Move lead4 = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.FOUR.getValue(), List.of(Rank.FOUR), 0);
+        PimcAiPlayer.MoveEvaluation preferBreak = new PimcAiPlayer.MoveEvaluation(break3);
+        preferBreak.record(100, 0.8);
+        PimcAiPlayer.MoveEvaluation preferSafe = new PimcAiPlayer.MoveEvaluation(lead4);
+        preferSafe.record(100, 0.3);
+        Move chosen = PimcAiPlayer.selectWithHardGuards(
+                java.util.List.of(preferBreak, preferSafe),
+                java.util.List.of(break3, lead4),
+                hand, null, false, false);
+        assertThat(chosen.toCardString()).isEqualTo("4");
+    }
+
+    @Test
+    @DisplayName("硬护栏：有对 5 可压时禁止用对 10 超压")
+    void testHardGuardBlocksPairOvershoot() {
+        Hand hand = Deck.fromCardString("5,5,10,10,2,2,2");
+        Move last = com.farmer.model.Move.of(
+                com.farmer.model.CardType.PAIR, Rank.THREE.getValue(),
+                java.util.List.of(Rank.THREE, Rank.THREE), 1);
+        Move tens = com.farmer.model.Move.of(
+                com.farmer.model.CardType.PAIR, Rank.TEN.getValue(),
+                java.util.List.of(Rank.TEN, Rank.TEN), 0);
+        Move fives = com.farmer.model.Move.of(
+                com.farmer.model.CardType.PAIR, Rank.FIVE.getValue(),
+                java.util.List.of(Rank.FIVE, Rank.FIVE), 0);
+        PimcAiPlayer.MoveEvaluation preferTens = new PimcAiPlayer.MoveEvaluation(tens);
+        preferTens.record(80, 0.9);
+        PimcAiPlayer.MoveEvaluation preferFives = new PimcAiPlayer.MoveEvaluation(fives);
+        preferFives.record(80, 0.5);
+        Move chosen = PimcAiPlayer.selectWithHardGuards(
+                java.util.List.of(preferTens, preferFives),
+                java.util.List.of(tens, fives, com.farmer.model.Move.pass(0)),
+                hand, last, false, false);
+        assertThat(chosen.toCardString()).isEqualTo("5,5");
+    }
+
+    @Test
+    @DisplayName("硬护栏：全对子只能拆对压中小牌时优先过牌")
+    void testHardGuardPassInsteadOfBreakPair() {
+        Hand hand = Deck.fromCardString("5,5,K,K,A,A,2,2");
+        Move last = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.SEVEN.getValue(), List.of(Rank.SEVEN), 1);
+        Move king = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.KING.getValue(), List.of(Rank.KING), 0);
+        Move pass = com.farmer.model.Move.pass(0);
+        PimcAiPlayer.MoveEvaluation preferKing = new PimcAiPlayer.MoveEvaluation(king);
+        preferKing.record(100, 0.85);
+        PimcAiPlayer.MoveEvaluation preferPass = new PimcAiPlayer.MoveEvaluation(pass);
+        preferPass.record(100, 0.40);
+        Move chosen = PimcAiPlayer.selectWithHardGuards(
+                java.util.List.of(preferKing, preferPass),
+                java.util.List.of(king, pass),
+                hand, last, false, false);
+        assertThat(chosen.isPass()).isTrue();
+    }
+
+    @Test
+    @DisplayName("农民绝不压队友（含王炸）")
+    void testFarmerNeverBeatsTeammate() {
+        // 座位顺序 0→1→2：地主 P0 出牌后，农民 P1 出 K，轮到农民 P2（有王炸）应过牌
+        Hand p0 = Deck.fromCardString("3,4,5,6,7,8,9,10,J,Q,A,2,3,4,5,6,7");
+        Hand p1 = Deck.fromCardString("4,5,6,6,7,8,9,10,K,K,A,2,3,4,5,6,7");
+        Hand p2 = Deck.fromCardString("3,3,4,J,J,8,9,10,J,Q,A,2,BJ,RJ,5,6,7");
+        GameState state = new GameState(List.of(p0, p1, p2), 0, List.of(Rank.THREE, Rank.FOUR, Rank.FIVE));
+        state.applyMove(com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.THREE.getValue(), List.of(Rank.THREE), 0));
+        state.applyMove(com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.KING.getValue(), List.of(Rank.KING), 1));
+        PublicView view = state.getPublicView(2);
+        PimcAiPlayer ai = new PimcAiPlayer(8, 40);
+        PimcAiPlayer.DecisionResult result = ai.decide(view);
+        assertThat(result.getSelectedMove().isPass()).isTrue();
+    }
+
+    @Test
+    @DisplayName("硬护栏：主动有落单时禁止拆对出单")
+    void testHardGuardBlocksLeadBreakWhenSinglesExist() {
+        Hand hand = Deck.fromCardString("3,6,7,8,8,10,10,Q,K,2");
+        Move break8 = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.EIGHT.getValue(), List.of(Rank.EIGHT), 0);
+        Move lead3 = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.THREE.getValue(), List.of(Rank.THREE), 0);
+        Move pair10 = com.farmer.model.Move.of(
+                com.farmer.model.CardType.PAIR, Rank.TEN.getValue(),
+                java.util.List.of(Rank.TEN, Rank.TEN), 0);
+        PimcAiPlayer.MoveEvaluation preferBreak = new PimcAiPlayer.MoveEvaluation(break8);
+        preferBreak.record(100, 0.9);
+        PimcAiPlayer.MoveEvaluation e3 = new PimcAiPlayer.MoveEvaluation(lead3);
+        e3.record(10, 0.2);
+        PimcAiPlayer.MoveEvaluation e10 = new PimcAiPlayer.MoveEvaluation(pair10);
+        e10.record(10, 0.3);
+        Move chosen = PimcAiPlayer.selectWithHardGuards(
+                java.util.List.of(preferBreak, e3, e10),
+                java.util.List.of(break8, lead3, pair10),
+                hand, null, false, false);
+        assertThat(HandShape.breaksSet(hand, chosen)).isFalse();
+        assertThat(chosen.toCardString()).isNotEqualTo("8");
+    }
+
+    @Test
+    @DisplayName("硬护栏：尾牌两张时有 A 可压则不用大王超压")
+    void testHardGuardEndgamePreferAceOverRocket() {
+        Hand hand = Deck.fromCardString("A,RJ");
+        Move last = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.FOUR.getValue(), List.of(Rank.FOUR), 1);
+        Move rj = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.RED_JOKER.getValue(), List.of(Rank.RED_JOKER), 0);
+        Move ace = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.ACE.getValue(), List.of(Rank.ACE), 0);
+        PimcAiPlayer.MoveEvaluation preferRj = new PimcAiPlayer.MoveEvaluation(rj);
+        preferRj.record(50, 0.99);
+        PimcAiPlayer.MoveEvaluation preferAce = new PimcAiPlayer.MoveEvaluation(ace);
+        preferAce.record(50, 0.5);
+        Move chosen = PimcAiPlayer.selectWithHardGuards(
+                java.util.List.of(preferRj, preferAce),
+                java.util.List.of(rj, ace, com.farmer.model.Move.pass(0)),
+                hand, last, false, false);
+        assertThat(chosen.toCardString()).isEqualTo("A");
+    }
+
+    @Test
+    @DisplayName("硬护栏：非紧急禁止用三带二把 2 当带牌烧掉造死散")
+    void testHardGuardRejectsBurningControlAsAccessory() {
+        Hand hand = Deck.fromCardString("3,4,5,6,6,7,8,9,10,10,J,Q,K,2,2,2,BJ");
+        Move last = com.farmer.model.Move.of(
+                com.farmer.model.CardType.TRIPLE_PLUS_PAIR, Rank.NINE.getValue(),
+                java.util.List.of(Rank.NINE, Rank.NINE, Rank.NINE, Rank.FIVE, Rank.FIVE), 0);
+        Move burn = com.farmer.model.Move.of(
+                com.farmer.model.CardType.TRIPLE_PLUS_PAIR, Rank.TWO.getValue(),
+                java.util.List.of(Rank.TWO, Rank.TWO, Rank.TWO, Rank.TEN, Rank.TEN), 1);
+        Move pass = com.farmer.model.Move.pass(1);
+        PimcAiPlayer.MoveEvaluation preferBurn = new PimcAiPlayer.MoveEvaluation(burn);
+        preferBurn.record(100, 0.9);
+        PimcAiPlayer.MoveEvaluation preferPass = new PimcAiPlayer.MoveEvaluation(pass);
+        preferPass.record(100, 0.4);
+        Move chosen = PimcAiPlayer.selectWithHardGuards(
+                java.util.List.of(preferBurn, preferPass),
+                java.util.List.of(burn, pass),
+                hand, last, false, true);
+        assertThat(chosen.isPass()).isTrue();
+        assertThat(HandShape.createsDeadWithControl(hand, burn)).isTrue();
+    }
+
+    @Test
+    @DisplayName("HandShape: 弱单多且握控场时对敌应能找到夺权着法")
+    void testRescueBeaterWhenDeadWithControl() {
+        Hand hand = Deck.fromCardString("3,4,6,8,K,A,2,RJ");
+        Move last = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.JACK.getValue(), List.of(Rank.JACK), 0);
+        Move two = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.TWO.getValue(), List.of(Rank.TWO), 1);
+        Move rj = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.RED_JOKER.getValue(), List.of(Rank.RED_JOKER), 1);
+        Move ace = com.farmer.model.Move.of(
+                com.farmer.model.CardType.SINGLE, Rank.ACE.getValue(), List.of(Rank.ACE), 1);
+        Move pass = com.farmer.model.Move.pass(1);
+        Move rescue = HandShape.findRescueBeater(java.util.List.of(two, rj, ace, pass), hand, last);
+        assertThat(rescue).isNotNull();
+        assertThat(rescue.toCardString()).isEqualTo("A");
     }
 
     @Test

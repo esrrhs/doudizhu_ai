@@ -76,11 +76,18 @@ public class FastRolloutPolicy {
                     }
                 }
                 if (!structures.isEmpty()) {
-                    // 优先能带走弱单的结构，再按点数从小到大
+                    // 优先能带走弱单的结构，再按点数从小到大；禁止烧掉控场留死散
                     structures.sort(Comparator
-                            .comparingInt((Move m) -> HandShape.weakSinglesDelta(myHand, m))
+                            .comparingInt((Move m) -> HandShape.createsDeadWithControl(myHand, m) ? 1 : 0)
+                            .thenComparingInt((Move m) -> HandShape.burnsControlAsAccessory(m) ? 1 : 0)
+                            .thenComparingInt((Move m) -> HandShape.weakSinglesDelta(myHand, m))
                             .thenComparingInt(Move::getMainRank));
-                    return structures.get(0);
+                    Move bestStruct = structures.get(0);
+                    if (!HandShape.createsDeadWithControl(myHand, bestStruct)
+                            && !HandShape.burnsControlAsAccessory(bestStruct)) {
+                        return bestStruct;
+                    }
+                    // 结构都会造死散则改出对/单，不硬出
                 }
 
                 List<Move> trios = nonBombs.stream()
@@ -127,12 +134,8 @@ public class FastRolloutPolicy {
 
         if (isFarmer) {
             Player lastPlayer = state.getPlayer(state.getLastMovePlayerId());
-            if (lastPlayer.getRole().isFarmer()) {
-                if (lastMove.getMainRank() >= 10 || lastPlayer.getCardCount() <= 3) {
-                    if (passMove != null) {
-                        return passMove;
-                    }
-                }
+            if (lastPlayer.getRole().isFarmer() && passMove != null) {
+                return passMove;
             }
         }
 
@@ -153,6 +156,28 @@ public class FastRolloutPolicy {
                     .thenComparingInt((Move m) -> HandShape.weakSinglesDelta(myHand, m))
                     .thenComparingInt(Move::getMainRank));
             Move bestBeater = normalBeaters.get(0);
+
+            // 若存在不拆对的更小同型可压，禁止用控场牌/拆对去超压
+            Move cheapSafe = null;
+            for (Move m : normalBeaters) {
+                if (!HandShape.breaksSet(myHand, m) && m.getType() == lastMove.getType()) {
+                    cheapSafe = m;
+                    break; // 已按点数排序
+                }
+            }
+            if (cheapSafe != null && HandShape.isSevereOvershoot(bestBeater, cheapSafe)) {
+                bestBeater = cheapSafe;
+            } else if (cheapSafe != null && HandShape.breaksSet(myHand, bestBeater)
+                    && !HandShape.breaksSet(myHand, cheapSafe)) {
+                bestBeater = cheapSafe;
+            }
+
+            // 非紧急：烧掉控场造死散 → 过牌
+            if (passMove != null && myCardsCount >= 4 && lastPlayerCards > 3
+                    && (HandShape.burnsControlAsAccessory(bestBeater)
+                    || HandShape.createsDeadWithControl(myHand, bestBeater))) {
+                return passMove;
+            }
 
             boolean breaks = HandShape.breaksSet(myHand, bestBeater);
             if (bestBeater.getMainRank() >= Rank.TWO.getValue() || breaks) {

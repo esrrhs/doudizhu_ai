@@ -50,6 +50,7 @@ public final class SelfPlayRunner {
         int games = 5;
         int worlds = 40;
         int iters = 300;
+        int minutes = 0;
         long baseSeed = System.currentTimeMillis();
         Path outDir = Path.of("target/selfplay");
 
@@ -60,6 +61,8 @@ public final class SelfPlayRunner {
                 worlds = Integer.parseInt(args[i].substring("--worlds=".length()));
             } else if (args[i].startsWith("--iters=")) {
                 iters = Integer.parseInt(args[i].substring("--iters=".length()));
+            } else if (args[i].startsWith("--minutes=")) {
+                minutes = Integer.parseInt(args[i].substring("--minutes=".length()));
             } else if (args[i].startsWith("--seed=")) {
                 baseSeed = Long.parseLong(args[i].substring("--seed=".length()));
             } else if (args[i].startsWith("--out=")) {
@@ -70,11 +73,18 @@ public final class SelfPlayRunner {
         Files.createDirectories(outDir);
         List<GameRecord> all = new ArrayList<>();
         int totalIssues = 0;
+        long startedAt = System.currentTimeMillis();
+        long deadline = minutes > 0 ? startedAt + minutes * 60_000L : Long.MAX_VALUE;
 
-        System.out.printf("=== Self-play: games=%d worlds=%d iters=%d seed=%d ===%n",
-                games, worlds, iters, baseSeed);
+        if (minutes > 0) {
+            System.out.printf("=== Self-play: minutes=%d worlds=%d iters=%d seed=%d ===%n",
+                    minutes, worlds, iters, baseSeed);
+        } else {
+            System.out.printf("=== Self-play: games=%d worlds=%d iters=%d seed=%d ===%n",
+                    games, worlds, iters, baseSeed);
+        }
 
-        for (int g = 0; g < games; g++) {
+        for (int g = 0; (minutes > 0) ? (System.currentTimeMillis() < deadline) : (g < games); g++) {
             long seed = baseSeed + g;
             GameRecord rec = playOne(seed, worlds, iters);
             all.add(rec);
@@ -84,16 +94,19 @@ public final class SelfPlayRunner {
             }
             Path file = outDir.resolve(String.format("game-%d-seed%d.txt", g, seed));
             Files.writeString(file, formatGame(rec), StandardCharsets.UTF_8);
-            System.out.printf("Game %d seed=%d landlord=P%d winner=P%d(%s) steps=%d issues=%d -> %s%n",
+            long elapsedSec = (System.currentTimeMillis() - startedAt) / 1000;
+            System.out.printf("Game %d seed=%d landlord=P%d winner=P%d(%s) steps=%d issues=%d elapsed=%ds -> %s%n",
                     g, seed, rec.landlordId(), rec.winnerId(), rec.winningRole(),
                     rec.steps().size(),
                     rec.gameIssues().size() + rec.steps().stream().mapToInt(s -> s.issues().size()).sum(),
-                    file);
+                    elapsedSec, file);
         }
 
         Path summary = outDir.resolve("summary.txt");
-        Files.writeString(summary, formatSummary(all, totalIssues), StandardCharsets.UTF_8);
-        System.out.println(formatSummary(all, totalIssues));
+        String summaryText = formatSummary(all, totalIssues)
+                + String.format("elapsedSec=%d%n", (System.currentTimeMillis() - startedAt) / 1000);
+        Files.writeString(summary, summaryText, StandardCharsets.UTF_8);
+        System.out.println(summaryText);
         System.out.println("Summary written to " + summary.toAbsolutePath());
     }
 
@@ -197,7 +210,7 @@ public final class SelfPlayRunner {
         if (HandShape.breaksSet(handBefore, chosen)) {
             if (leading) {
                 issues.add("LEAD_BREAK_SET: 主动拆对/拆三出单 " + chosen.toCardString());
-            } else if (canPass) {
+            } else if (canPass && handBefore.getTotalCards() > 2) {
                 int oppCards = state.getPlayer(state.getLastMovePlayerId()).getCardCount();
                 if (oppCards > 3 && last.getMainRank() <= 10) {
                     issues.add("FOLLOW_BREAK_PAIR: 非紧急拆对压中小牌 " + chosen.toCardString()

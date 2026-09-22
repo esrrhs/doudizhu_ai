@@ -19,13 +19,13 @@
 <dependency>
     <groupId>com.github.esrrhs</groupId>
     <artifactId>farmer-ai</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 
 ### Gradle
 ```groovy
-implementation 'com.github.esrrhs:farmer-ai:1.0.0'
+implementation 'com.github.esrrhs:farmer-ai:1.1.0'
 ```
 
 ---
@@ -61,6 +61,15 @@ implementation 'com.github.esrrhs:farmer-ai:1.0.0'
   - **王炸（火箭）**：大王 + 小王，克制所有牌型；
   - **炸弹**：4 张同点数，克制所有非炸弹牌型；
   - **普通牌型**：单张、对子、三张、三带一、三带二、单顺（5张起）、双顺（3对起）、飞机（2个连续三张起）、四带二（带两单或两对）。
+
+### 5. 防散牌死手启发与硬护栏策略
+- **手牌形态分析 (HandShape)**：深度解析手牌散牌数、控场大牌（2与双王）及牌型结构，精确评估出牌前后弱单增减量与死散手牌风险；
+- **决策硬护栏**：
+  - **防拆对与大牌超压**：有更小同型安全牌时不拆对压小牌、不用大牌超压；
+  - **控场牌保护**：禁止将 2 或王作为三带或顺子的带牌过早烧掉制造死散；
+  - **队友协同绝对保障**：农民跟牌阶段绝不压队友合法走法，自动过牌控盘保送队友；
+  - **非紧急勿炸**：严格限制非关键时刻交出炸弹与王炸。
+- **三人自对弈审局工具 (SelfPlayRunner)**：内置全自动对战推演与违规启发审查工具，保障策略迭代的高质量。
 
 ---
 

@@ -192,6 +192,29 @@ public final class BombPolicy {
             adjWinRate -= 0.06 * HandShape.weakSinglesDelta(hand, move);
         }
 
+        // 抑制 DEAD_HAND：烧掉控场留散牌 / 出完后死散仍握控场
+        if (hand != null && !move.isPass()) {
+            int weakNow = HandShape.countWeakSingles(hand);
+            boolean holdingControl = HandShape.hasControl(hand);
+            if (HandShape.burnsControlAsAccessory(move) && !urgent) {
+                adjWinRate -= 0.16;
+                adjVisits *= 0.4;
+            }
+            if (HandShape.createsDeadWithControl(hand, move)) {
+                adjWinRate -= 0.22;
+                adjVisits *= 0.3;
+            }
+            // 已有较多弱单且握控场：奖励带走弱单的结构，惩罚继续摊散
+            if (holdingControl && weakNow >= 3 && !urgent) {
+                int delta = HandShape.weakSinglesDelta(hand, move);
+                if (delta < 0) {
+                    adjWinRate += 0.07 * (-delta);
+                } else if (delta > 0) {
+                    adjWinRate -= 0.05 * delta;
+                }
+            }
+        }
+
         // 有更小同型可压时，惩罚大牌超压（有 9 却出 2）
         if (hand != null && lastMove != null && !lastMove.isPass() && !move.isPass()
                 && !isBombOrRocket(move) && move.getType() == lastMove.getType()
