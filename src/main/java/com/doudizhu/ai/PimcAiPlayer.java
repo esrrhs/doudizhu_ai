@@ -17,7 +17,7 @@ import java.util.stream.IntStream;
 /**
  * 斗地主 PIMC AI 引擎
  */
-public class PimcAiPlayer {
+public class PimcAiPlayer implements AiPlayer {
     private final int numDeterminizations;
     private final int mctsIterationsPerWorld;
     private final Random random;
@@ -98,6 +98,7 @@ public class PimcAiPlayer {
         }
     }
 
+    @Override
     public DecisionResult decide(PublicView publicView) {
         long startTime = System.currentTimeMillis();
         int myId = publicView.getViewingPlayerId();

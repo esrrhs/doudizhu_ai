@@ -44,6 +44,8 @@
         <slf4j.version>2.0.12</slf4j.version>
         <logback.version>1.5.3</logback.version>
         <jackson.version>2.17.0</jackson.version>
+        <djl.version>0.39.0</djl.version>
+        <pytorch.version>2.7.1</pytorch.version>
     </properties>
 
     <dependencies>
@@ -66,6 +68,29 @@
             <version>${jackson.version}</version>
         </dependency>
 
+
+        <!-- 原生推理 (可选): 只有神经网络玩家需要, optional 使其不传递给下游依赖方。
+             各平台的 libtorch 原生库见 profiles 按 OS 自动引入, 未覆盖的平台会退回
+             DJL 首次使用时自动下载到 ~/.djl.ai -->
+        <dependency>
+            <groupId>ai.djl</groupId>
+            <artifactId>api</artifactId>
+            <version>${djl.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>ai.djl.pytorch</groupId>
+            <artifactId>pytorch-engine</artifactId>
+            <version>${djl.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>ai.djl.pytorch</groupId>
+            <artifactId>pytorch-jni</artifactId>
+            <version>${pytorch.version}-${djl.version}</version>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
 
         <!-- Testing -->
         <dependency>
@@ -130,6 +155,72 @@
     </build>
 
     <profiles>
+        <!-- 神经网络玩家所需 libtorch 原生库, 按构建平台显式引入 (均 optional, 不传递给下游)。
+             未覆盖的平台 (如 Intel Mac) 会退回 DJL 首次使用时自动下载到 ~/.djl.ai。 -->
+        <profile>
+            <id>nn-macos-aarch64</id>
+            <activation>
+                <os><family>mac</family><arch>aarch64</arch></os>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>ai.djl.pytorch</groupId>
+                    <artifactId>pytorch-native-cpu</artifactId>
+                    <classifier>osx-aarch64</classifier>
+                    <version>${pytorch.version}</version>
+                    <scope>runtime</scope>
+                    <optional>true</optional>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>nn-linux-x86_64</id>
+            <activation>
+                <os><name>Linux</name><arch>amd64</arch></os>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>ai.djl.pytorch</groupId>
+                    <artifactId>pytorch-native-cpu</artifactId>
+                    <classifier>linux-x86_64</classifier>
+                    <version>${pytorch.version}</version>
+                    <scope>runtime</scope>
+                    <optional>true</optional>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>nn-linux-aarch64</id>
+            <activation>
+                <os><name>Linux</name><arch>aarch64</arch></os>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>ai.djl.pytorch</groupId>
+                    <artifactId>pytorch-native-cpu</artifactId>
+                    <classifier>linux-aarch64</classifier>
+                    <version>${pytorch.version}</version>
+                    <scope>runtime</scope>
+                    <optional>true</optional>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>nn-windows-x86_64</id>
+            <activation>
+                <os><family>windows</family><arch>amd64</arch></os>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>ai.djl.pytorch</groupId>
+                    <artifactId>pytorch-native-cpu</artifactId>
+                    <classifier>win-x86_64</classifier>
+                    <version>${pytorch.version}</version>
+                    <scope>runtime</scope>
+                    <optional>true</optional>
+                </dependency>
+            </dependencies>
+        </profile>
         <profile>
             <id>release</id>
             <build>

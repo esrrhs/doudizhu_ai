@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.doudizhu.ai.BidEvaluator;
 import com.doudizhu.ai.PimcAiPlayer;
 import com.doudizhu.game.GameState;
+import com.doudizhu.nn.ActorNetwork;
 import com.doudizhu.model.Move;
 import com.doudizhu.model.Rank;
 import com.sun.net.httpserver.HttpExchange;
@@ -55,7 +56,15 @@ public class GameHttpServer {
         return t;
     });
 
+    private final ActorNetwork neural;
+
     public GameHttpServer(int port) {
+        this(port, null);
+    }
+
+    /** @param neural 非空时 AI 座位使用强化学习策略网络 */
+    public GameHttpServer(int port, ActorNetwork neural) {
+        this.neural = neural;
         this.port = port;
         this.sessionCleaner.scheduleAtFixedRate(this::cleanExpiredSessions, 10, 10, TimeUnit.MINUTES);
     }
@@ -117,7 +126,7 @@ public class GameHttpServer {
 
     private GameSession getSession(HttpExchange exchange) {
         String sessionId = getOrInitSessionId(exchange);
-        SessionContainer container = sessions.computeIfAbsent(sessionId, id -> new SessionContainer(new GameSession()));
+        SessionContainer container = sessions.computeIfAbsent(sessionId, id -> new SessionContainer(new GameSession(neural)));
         container.touch();
         return container.session;
     }
