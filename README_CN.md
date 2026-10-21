@@ -116,10 +116,35 @@ cd go && go test ./...      # 21 个测试, 零第三方依赖
 ```
 
 ```go
-import ddz "github.com/esrrhs/doudizhu_ai/go"
+package main
 
-policy, err := ddz.Load()                          // 权重目录按仓库位置自动定位
-move, logits, err := policy.Decide(view)           // 完整枚举候选后取最高分
+import (
+	"fmt"
+
+	ddz "github.com/esrrhs/doudizhu_ai/go"
+)
+
+func main() {
+	policy, err := ddz.Load() // 权重在 data/models/ts
+	if err != nil {
+		panic(err)
+	}
+	hands := make([][15]int32, 3)
+	for i, cards := range []string{"334445566689TTTJKAAR", "4577899JQQKKAA222", "335677889TJJQQK2B"} {
+		hands[i], _ = ddz.ParseCards(cards)
+	}
+	bottom, _ := ddz.ParseCards("4TK")
+	// 地主那 20 张已含底牌, NewState 不会再叠加
+	state, err := ddz.NewState(hands, 0, bottom)
+	if err != nil {
+		panic(err)
+	}
+	move, logits, err := policy.Decide(state.PublicViewOf(state.ActivePlayerID()))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(move, len(logits))
+}
 ```
 
 ### C++
@@ -132,25 +157,47 @@ ctest --test-dir build --output-on-failure
 ```
 
 ```cpp
+#include <array>
+#include <cstdio>
+
 #include "doudizhu/api.h"
 
-doudizhu::Policy policy;
-policy.Load(doudizhu::Policy::DefaultModelDir());
-auto d = policy.Decide(state.GetPublicView(active));
+int main()
+{
+    doudizhu::Policy policy;
+    if (!policy.Load(doudizhu::Policy::DefaultModelDir()))
+    {
+        std::fprintf(stderr, "%s\n", policy.Error().c_str());
+        return 1;
+    }
+    const std::array<doudizhu::CardSet, 3> hands{
+        doudizhu::ParseCards("334445566689TTTJKAAR"),
+        doudizhu::ParseCards("4577899JQQKKAA222"),
+        doudizhu::ParseCards("335677889TJJQQK2B")};
+    const doudizhu::CardSet bottom = doudizhu::ParseCards("4TK");
+    doudizhu::GameState state(hands, 0, bottom);
+    const auto d = policy.Decide(state.GetPublicView(state.ActivePlayerIndex()));
+    std::printf("%s (%d candidates)\n", doudizhu::DebugCards(d.move.cards).c_str(),
+                static_cast<int>(d.options.size()));
+    return 0;
+}
 ```
+
+上面两段都是先编译、先跑通才写进文档的：同一个局面两边都答 **`334455`，候选 68 个**，
+与 Java 引擎对这副牌的选择一致。
 
 ---
 
 ## 🌐 网页对战平台 (FakeLua)
 
-线上：<https://doudizhu.esrrhs.xyz>（部署与发布步骤见 [server/README.md](server/README.md)）。
+线上：<https://doudizhu.esrrhs.xyz>（部署与发布步骤见 [server/README_CN.md](server/README_CN.md)）。
 
 1 真人（0 号位）对 2 个策略网络 AI：随机叫分、底牌翻开、AI 提示、AI 思路面板、
 记牌器与战报日志、多 Session 隔离。
 
 ```bash
 cd server
-cmake -S host -B host/build -DCMAKE_BUILD_TYPE=Release   # 需要先装 fakelua, 见 server/README.md
+cmake -S host -B host/build -DCMAKE_BUILD_TYPE=Release   # 需要先装 fakelua, 见 server/README_CN.md
 cmake --build host/build -j
 DOUDIZHU_PORT=8080 ./host/build/doudizhu_server lua      # http://localhost:8080
 python3 tests/api_test.py                               # 12 个接口用例
@@ -176,7 +223,7 @@ python3 tools/export_actor.py script --in /tmp/params --out data/models/ts
 `export_actor.py` 同时会写 `actor<N>_manifest.json`：TorchScript zip 把张量以 **STORED（不压缩）**
 形式存成 `actor<N>_data/<i>`，清单记录「条目序号 → 层 → 形状」，Go/C++ 因此只用标准库解析 zip 就能加载。
 基准记录由 `tools/pddump.cpp` 生成。步骤、格式与踩坑（LSTM 门块顺序是 **i, f, g, o**，写错会有
-上千量级的偏差）见 [tools/README.md](tools/README.md)。
+上千量级的偏差）见 [tools/README_CN.md](tools/README_CN.md)。
 
 ---
 
