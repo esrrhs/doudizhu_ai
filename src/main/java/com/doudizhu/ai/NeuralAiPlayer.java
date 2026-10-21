@@ -13,16 +13,17 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * 强化学习策略网络玩家：对当前所有合法动作打分，直接取最高分出牌。
+ * 强化学习策略网络玩家：完整枚举合法动作，逐手打分后直接取最高分出牌。
  *
- * <p>与 {@link PimcAiPlayer} 的采样搜索是两条独立路线：这里的权重由 PerfectDou 式自对弈 RL
- * 训练得到，动作空间用 {@link PerfectDouMoves} 完整枚举 (与训练侧一致)，观察特征只用公开信息。
- * 推理走 DJL 的原生 libtorch，因此依赖是 optional 的；不加载权重时核心引擎不受影响。
- *
- * <p>{@code DecisionResult} 里的 winRate 字段在本网压下填的是 softmax 后的**策略概率**，
+ * <p>权重由 PerfectDou 式自对弈强化学习训练 (见 PerfectDouCPP)，输入编码与动作空间在
+ * {@link PerfectDouFeatures} / {@link PerfectDouMoves} 中与训练侧逐位对齐，观察只使用公开信息。
+ * 推理走 DJL 的原生 libtorch，{@code DecisionResult} 里的概率是 softmax 后的策略偏好，
  * 不是搜索胜率。
  */
 public class NeuralAiPlayer implements AiPlayer {
+
+    /** 仓库内自带的权重目录 */
+    public static final Path DEFAULT_MODEL_DIR = Path.of("models/ts");
 
     private final ActorNetwork network;
 
@@ -30,17 +31,22 @@ public class NeuralAiPlayer implements AiPlayer {
         this.network = network;
     }
 
-    /** 从权重目录 (含 actor0_ts.pt .. actor2_ts.pt) 创建，权重常驻复用，可多座位共享同一实例 */
+    /** 加载仓库默认目录 {@code models/ts} 下的权重 */
+    public static NeuralAiPlayer create() throws IOException {
+        return fromDirectory(DEFAULT_MODEL_DIR);
+    }
+
+    /** 从权重目录 (含 actor0_ts.pt .. actor2_ts.pt) 创建；可多座位共享同一实例 */
     public static NeuralAiPlayer fromDirectory(Path dir) throws IOException {
         return new NeuralAiPlayer(ActorNetwork.load(dir));
     }
 
     @Override
-    public PimcAiPlayer.DecisionResult decide(PublicView publicView) {
+    public AiDecision decide(PublicView publicView) {
         long startTime = System.currentTimeMillis();
         int myId = publicView.getViewingPlayerId();
         if (publicView.getMyHand().isEmpty()) {
-            return new PimcAiPlayer.DecisionResult(Move.pass(myId), List.of(), 0);
+            return AiDecision.of(Move.pass(myId), 0);
         }
 
         PerfectDouFeatures.View observed = PerfectDouFeatures.observe(publicView);
@@ -70,13 +76,12 @@ public class NeuralAiPlayer implements AiPlayer {
             }
         }
 
-        List<PimcAiPlayer.MoveEvaluation> evaluations = probabilityTable(moves, scores);
-        return new PimcAiPlayer.DecisionResult(moves[best], evaluations,
+        return new AiDecision(moves[best], probabilityTable(moves, scores),
                 System.currentTimeMillis() - startTime);
     }
 
     /** 候选动作按策略概率从高到低排列，供前端展示思路 */
-    private static List<PimcAiPlayer.MoveEvaluation> probabilityTable(Move[] moves, float[] scores) {
+    private static List<MoveScore> probabilityTable(Move[] moves, float[] scores) {
         double max = scores[0];
         for (float s : scores) {
             max = Math.max(max, s);
@@ -87,13 +92,11 @@ public class NeuralAiPlayer implements AiPlayer {
             exp[i] = Math.exp(scores[i] - max);
             sum += exp[i];
         }
-        List<PimcAiPlayer.MoveEvaluation> out = new ArrayList<>(moves.length);
+        List<MoveScore> out = new ArrayList<>(moves.length);
         for (int i = 0; i < moves.length; ++i) {
-            PimcAiPlayer.MoveEvaluation eval = new PimcAiPlayer.MoveEvaluation(moves[i]);
-            eval.record(1, sum == 0 ? 0 : exp[i] / sum);
-            out.add(eval);
+            out.add(new MoveScore(moves[i], sum == 0 ? 0 : exp[i] / sum));
         }
-        out.sort(Comparator.comparingDouble(PimcAiPlayer.MoveEvaluation::getAverageWinRate).reversed());
+        out.sort(Comparator.comparingDouble(MoveScore::probability).reversed());
         return out;
     }
 }

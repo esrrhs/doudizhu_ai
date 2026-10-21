@@ -1,4 +1,4 @@
-// 斗地主网页端游戏逻辑与交互控制 (PIMC 2v1 非对称博弈、底牌采样叫地主与多会话支持)
+// 斗地主网页端游戏逻辑与交互控制 (强化学习策略网络出牌、随机叫地主与多会话支持)
 document.addEventListener("DOMContentLoaded", () => {
     let currentState = null;
     let selectedCards = [];
@@ -154,12 +154,13 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             const data = await res.json();
             if (data.error) {
-                alert("⚠️ " + data.error);
+                showToast("⚠️ " + data.error, "warning");
             } else {
                 updateUI(data);
             }
         } catch (err) {
             console.error("Bid error:", err);
+            showToast("⚠️ 网络请求异常", "warning");
         }
     }
 
@@ -293,7 +294,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (isHumanBidTurn) {
             turnIndicator.textContent = "👉 轮到你表态：手牌是否符合心意？请选择【叫地主】或【不叫】";
         } else {
-            turnIndicator.textContent = `⏳ 玩家 P${state.currentBidder} (AI) 正在采样未知底牌推演地主胜率...`;
+            turnIndicator.textContent = `⏳ 玩家 P${state.currentBidder} (AI) 正在随机表态是否叫地主...`;
             if (!isAiStepInProgress) {
                 triggerAiTurn();
             }
@@ -439,14 +440,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            let winRate = null;
-            if (thought.type === "bid") {
-                winRate = thought.winRate;
-            } else if (thought.type === "play" && thought.evals && thought.evals.length > 0) {
-                winRate = thought.evals[0].winRate;
+            // 策略概率: 神经网络选中这手牌的置信度, 不是搜索胜率
+            let probability = null;
+            if (thought.type === "play" && thought.evals && thought.evals.length > 0) {
+                probability = thought.evals[0].probability;
             }
 
-            if (winRate === null || winRate === undefined) {
+            if (probability === null || probability === undefined) {
                 moodEl.classList.add("hidden");
                 avatarEl.className = "player-avatar";
                 return;
@@ -456,20 +456,20 @@ document.addEventListener("DOMContentLoaded", () => {
             let level = "normal";
             let speechLine = "";
 
-            if (winRate >= 70.0) {
+            if (probability >= 70.0) {
                 level = "high";
                 moodBadge = isLandlord ? "😎" : "🥳";
-                speechLine = isLandlord ? `🔥 胜券在握！(${winRate}%)` : `🌾 稳稳拿下！(${winRate}%)`;
+                speechLine = `🔥 就它了！(置信 ${probability}%)`;
                 avatarEl.className = "player-avatar avatar-cheer";
-            } else if (winRate <= 35.0) {
+            } else if (probability <= 35.0) {
                 level = "low";
                 moodBadge = isLandlord ? "😰" : "😭";
-                speechLine = isLandlord ? `💦 局势危急...(${winRate}%)` : `😭 顶不住啦！(${winRate}%)`;
+                speechLine = `😵 没太好的选择 (置信 ${probability}%)`;
                 avatarEl.className = "player-avatar avatar-panic";
             } else {
                 level = "normal";
                 moodBadge = isLandlord ? "😏" : "🧐";
-                speechLine = `🤔 局势焦灼 (${winRate}%)`;
+                speechLine = `🤔 还要权衡 (${probability}%)`;
                 avatarEl.className = "player-avatar";
             }
 
@@ -569,31 +569,31 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!act) return;
             const container = areaMap[idx];
 
-            // 检查胜率特效 class
-            let winRateAnimClass = "";
+            // 按策略概率决定是否加特效
+            let probAnimClass = "";
             if (currentState && currentState.aiThoughts && idx > 0) {
                 const thoughtKey = (idx === 1) ? "p1" : "p2";
                 const thought = currentState.aiThoughts[thoughtKey];
                 if (thought && thought.type === "play" && thought.evals && thought.evals.length > 0) {
-                    const topWinRate = thought.evals[0].winRate;
-                    if (topWinRate >= 75.0) {
-                        winRateAnimClass = "anim-win-high";
-                    } else if (topWinRate <= 30.0) {
-                        winRateAnimClass = "anim-win-low";
+                    const topProbability = thought.evals[0].probability;
+                    if (topProbability >= 75.0) {
+                        probAnimClass = "anim-win-high";
+                    } else if (topProbability <= 30.0) {
+                        probAnimClass = "anim-win-low";
                     }
                 }
             }
 
             if (act.isPass) {
                 const badge = document.createElement("div");
-                badge.className = `pass-badge ${winRateAnimClass}`;
+                badge.className = `pass-badge ${probAnimClass}`;
                 badge.textContent = "不出 / PASS";
                 container.appendChild(badge);
             } else if (act.cards && act.cards.length > 0) {
                 act.cards.forEach(cardSymbol => {
                     const el = createCardElement(cardSymbol, true);
-                    if (winRateAnimClass) {
-                        el.classList.add(winRateAnimClass);
+                    if (probAnimClass) {
+                        el.classList.add(probAnimClass);
                     }
                     container.appendChild(el);
                 });
@@ -731,51 +731,33 @@ document.addEventListener("DOMContentLoaded", () => {
             const roleStr = (roles && roles[id] && roles[id] !== "待定") ? ` (${roles[id]})` : "";
             let html = "";
 
-            if (thought.type === "bid") {
-                const decisionText = thought.shouldCall ? "👑 叫地主" : "🙅 不叫";
-                const decisionColor = thought.shouldCall ? "#f59e0b" : "#94a3b8";
-                const widthPercent = Math.min(100, Math.max(5, thought.winRate));
-                const controlScoreText = (thought.controlScore !== undefined) ? `<div>硬牌力分: <strong>${thought.controlScore}</strong></div>` : "";
-                const summaryHtml = thought.summary ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">📝 ${thought.summary}</div>` : "";
+            let probIcon = "";
+            if (thought.evals && thought.evals.length > 0) {
+                const topProbability = thought.evals[0].probability;
+                if (topProbability >= 75.0) probIcon = "🔥";
+                else if (topProbability <= 30.0) probIcon = "💧";
+            }
 
-                html = `
-                    <div style="font-weight: 600; color: #38bdf8; margin-bottom: 2px;">底牌采样推演</div>
-                    <div>预估胜率: <strong style="color: #f59e0b;">${thought.winRate}%</strong> (${thought.sims} 世界)</div>
-                    ${controlScoreText}
-                    <div class="progress-bar-bg" style="margin: 4px 0;">
-                        <div class="progress-bar-fill" style="width: ${widthPercent}%;"></div>
-                    </div>
-                    <div>表态: <strong style="color: ${decisionColor};">${decisionText}</strong></div>
-                    ${summaryHtml}
-                `;
-            } else {
-                let winRateAnimIcon = "";
-                if (thought.evals && thought.evals.length > 0) {
-                    const topRate = thought.evals[0].winRate;
-                    if (topRate >= 75.0) winRateAnimIcon = "🔥";
-                    else if (topRate <= 30.0) winRateAnimIcon = "💧";
-                }
+            html = `
+                <div style="font-weight: 600; color: #f59e0b; margin-bottom: 4px;">
+                    ${probIcon} 决策出牌: <strong>${thought.move}</strong>
+                </div>
+                <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">神经网络策略概率</div>
+            `;
 
-                html = `
-                    <div style="font-weight: 600; color: #f59e0b; margin-bottom: 4px;">
-                        ${winRateAnimIcon} 决策出牌: <strong>${thought.move}</strong>
-                    </div>
-                `;
-
-                if (thought.evals && thought.evals.length > 0) {
-                    thought.evals.forEach(ev => {
-                        const widthPercent = Math.min(100, Math.max(5, ev.winRate));
-                        html += `
-                            <div style="font-size: 11px; margin-top: 4px; display: flex; justify-content: space-between;">
-                                <span>${ev.cards}</span>
-                                <span>${ev.winRate}% (${ev.visits})</span>
-                            </div>
-                            <div class="progress-bar-bg">
-                                <div class="progress-bar-fill" style="width: ${widthPercent}%;"></div>
-                            </div>
-                        `;
-                    });
-                }
+            if (thought.evals && thought.evals.length > 0) {
+                thought.evals.forEach(ev => {
+                    const widthPercent = Math.min(100, Math.max(5, ev.probability));
+                    html += `
+                        <div style="font-size: 11px; margin-top: 4px; display: flex; justify-content: space-between;">
+                            <span>${ev.cards}</span>
+                            <span>${ev.probability}%</span>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" style="width: ${widthPercent}%;"></div>
+                        </div>
+                    `;
+                });
             }
 
             bodyEl.innerHTML = html;

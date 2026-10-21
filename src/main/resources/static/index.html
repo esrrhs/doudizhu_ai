@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>斗地主 AI 对战平台 (PIMC 2v1 非对称博弈)</title>
+    <title>斗地主 AI 对战平台 (强化学习策略网络)</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
         <header class="header">
             <div class="logo">
                 <span class="logo-icon">🃏</span>
-                <h1>斗地主 AI 对战室 <span class="badge">PIMC + 2v1 协同对抗 MCTS</span></h1>
+                <h1>斗地主 AI 对战室 <span class="badge">强化学习策略网络 (PerfectDou)</span></h1>
             </div>
             <div class="header-actions">
                 <button id="btn-rules" class="btn btn-secondary">📖 规则与算法</button>
@@ -156,18 +156,23 @@
     <div id="rules-modal" class="modal-overlay hidden">
         <div class="modal-content rules-modal-content">
             <div class="modal-header">
-                <h2>📖 斗地主规则与 PIMC AI 算法说明</h2>
+                <h2>📖 斗地主规则与 AI 算法说明</h2>
                 <button id="rules-close-icon" class="btn-close">&times;</button>
             </div>
             <div class="rules-body">
                 <section class="rule-sec highlight-sec">
-                    <h4>🤖 1. AI 叫地主算法 (底牌蒙特卡洛采样推演)</h4>
-                    <p>当轮到 AI 表态是否叫地主时，AI 采用<strong>思路二（PIMC 底牌采样推演法）</strong>：</p>
+                    <h4>🎲 1. 随机叫地主</h4>
+                    <p>叫分阶段每家独立以 <strong>1/3</strong> 的概率随机表态【叫地主】，最先叫的一家成为地主并拿走 3 张底牌；若三家都不叫则流局重新发牌。叫分与牌力无关，因此地主也可能拿到很弱的牌。你依然可以自己选择叫或不叫。</p>
+                </section>
+
+                <section class="rule-sec highlight-sec">
+                    <h4>🧠 2. 神经网络出牌 (强化学习策略网络)</h4>
+                    <p>出牌由 <strong>PerfectDou</strong> 式自对弈强化学习训练出的策略网络驱动，按座位 (地主 / 地主下家 / 地主上家) 各用一个网络：</p>
                     <ul>
-                        <li>从全场 37 张未知牌中采样 3 张作为假设底牌并入己方手牌；</li>
-                        <li>将其余 34 张牌随机分发给另外两名对手；</li>
-                        <li>通过极速推演策略（FastRollout）模拟数十局终局；</li>
-                        <li>若综合预估胜率达到或超过 <strong>50%</strong>，AI 果断选择【叫地主】；否则选择【不叫】。</li>
+                        <li>完整枚举当前所有合法走法（含飞机、四带二的全部具体带牌组合）；</li>
+                        <li>每个候选动作与局面特征一起送入网络打分，直接取最高分的走法；</li>
+                        <li>观察特征只用公开信息：我的手牌、两家合计的未知牌、各家已出与最近一手、底牌剩余、最近 30 手历史等，<strong>不读取任何人的私有手牌</strong>；</li>
+                        <li>界面「AI 思路」里的百分比是 softmax 归一化后的<strong>策略概率</strong>（模型对这手牌的偏好），不是搜索出来的胜率。</li>
                     </ul>
                 </section>
 

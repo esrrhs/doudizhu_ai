@@ -1,12 +1,10 @@
 package com.doudizhu.web;
 
+import com.doudizhu.ai.AiDecision;
 import com.doudizhu.ai.AiPlayer;
-import com.doudizhu.ai.BidEvaluator;
-import com.doudizhu.ai.NeuralAiPlayer;
-import com.doudizhu.ai.PimcAiPlayer;
+import com.doudizhu.ai.BidRule;
 import com.doudizhu.game.GameState;
 import com.doudizhu.game.PublicView;
-import com.doudizhu.nn.ActorNetwork;
 import com.doudizhu.model.CardType;
 import com.doudizhu.model.Hand;
 import com.doudizhu.model.Move;
@@ -24,7 +22,7 @@ import java.util.Map;
 import java.util.Random;
 
 /**
- * 斗地主网页端游戏会话 (支持叫地主阶段与 PIMC 2v1 实战对弈)
+ * 斗地主网页端游戏会话 (随机叫地主阶段 + 神经网络出牌)
  */
 public class GameSession {
 
@@ -39,7 +37,6 @@ public class GameSession {
     private int bidStartPlayer;
     private int bidsCount;
     private final String[] bidActions = new String[3];
-    private final Map<Integer, BidEvaluator.BidResult> lastBidThoughts = new HashMap<>();
 
     private final Hand[] initialHands = new Hand[3];
     private List<Rank> bottomCards = new ArrayList<>(3);
@@ -47,29 +44,15 @@ public class GameSession {
     private int landlordId = -1;
 
     private GameState gameState;
-    private final AiPlayer aiPlayer1;
-    private final AiPlayer aiPlayer2;
-    private final Map<Integer, PimcAiPlayer.DecisionResult> lastAiThoughts = new HashMap<>();
+    private final AiPlayer aiPlayer;
+    private final Map<Integer, AiDecision> lastAiThoughts = new HashMap<>();
     private final List<String> eventLogs = new ArrayList<>();
     private final Move[] playerLastActions = new Move[3];
     private final Random random = new Random();
 
-    public GameSession() {
-        this(null);
-    }
-
-    /**
-     * @param neural 非空时两个 AI 座位都改用强化学习策略网络, 否则用 PIMC 搜索
-     */
-    public GameSession(ActorNetwork neural) {
-        if (neural == null) {
-            this.aiPlayer1 = new PimcAiPlayer(240, 1600, random);
-            this.aiPlayer2 = new PimcAiPlayer(240, 1600, random);
-        } else {
-            // 权重只加载一次, 三个座位共用同一实例
-            this.aiPlayer1 = new NeuralAiPlayer(neural);
-            this.aiPlayer2 = this.aiPlayer1;
-        }
+    /** @param aiPlayer 驱动 P1/P2 两个 AI 座位的决策器 (无状态, 可共用同一实例) */
+    public GameSession(AiPlayer aiPlayer) {
+        this.aiPlayer = aiPlayer;
         // 默认进入互动式叫地主流程 (随机首叫玩家)
         startBiddingGame(-1);
     }
@@ -85,7 +68,6 @@ public class GameSession {
         Arrays.fill(this.bidActions, null);
         Arrays.fill(this.playerLastActions, null);
         this.lastAiThoughts.clear();
-        this.lastBidThoughts.clear();
         this.eventLogs.clear();
 
         // 54 张牌洗牌发牌
@@ -126,7 +108,6 @@ public class GameSession {
         this.stage = Stage.PLAYING;
         this.gameState = new GameState(dealResult.playerHands(), targetLandlordId, dealResult.bottomCards());
         this.lastAiThoughts.clear();
-        this.lastBidThoughts.clear();
         this.eventLogs.clear();
         Arrays.fill(this.bidActions, null);
         Arrays.fill(this.playerLastActions, null);
@@ -160,7 +141,7 @@ public class GameSession {
     }
 
     /**
-     * AI 玩家表态叫地主 / 不叫 (基于思路二：底牌蒙特卡洛采样推演胜率)
+     * AI 玩家表态叫地主 / 不叫：按 {@link BidRule} 随机决定，与手牌强弱无关
      */
     public synchronized String aiBidStep() {
         if (stage != Stage.BIDDING) {
@@ -171,25 +152,16 @@ public class GameSession {
         }
 
         int activeId = currentBidder;
-        Hand myHand = initialHands[activeId];
-
-        // 采用思路二 + MCTS 深度推演：60 个底牌假想世界 x 80 次 MCTS 搜索迭代
-        BidEvaluator.BidResult result = BidEvaluator.evaluate(myHand, 60, 80, 0.50, random);
-        lastBidThoughts.put(activeId, result);
-
-        if (result.shouldCall()) {
+        if (BidRule.shouldCall(random)) {
             bidActions[activeId] = "叫地主";
-            addLog(String.format("🤖 玩家 P%d (AI) [MCTS推演胜率 %.1f%% | 硬牌力分 %d] 决定【叫地主】！",
-                    activeId, result.winRate() * 100, result.controlScore()));
+            addLog(String.format("🎲 玩家 P%d (AI) 随机表态【叫地主】！", activeId));
             finalizeLandlord(activeId);
             return "叫地主";
-        } else {
-            bidActions[activeId] = "不叫";
-            addLog(String.format("🤖 玩家 P%d (AI) [MCTS推演胜率 %.1f%% | 硬牌力分 %d] 决定【不叫】。",
-                    activeId, result.winRate() * 100, result.controlScore()));
-            advanceBidder();
-            return "不叫";
         }
+        bidActions[activeId] = "不叫";
+        addLog(String.format("🎲 玩家 P%d (AI) 随机表态【不叫】。", activeId));
+        advanceBidder();
+        return "不叫";
     }
 
     private void advanceBidder() {
@@ -241,10 +213,6 @@ public class GameSession {
         return bidActions.clone();
     }
 
-    public synchronized Map<Integer, BidEvaluator.BidResult> getLastBidThoughts() {
-        return Collections.unmodifiableMap(lastBidThoughts);
-    }
-
     public synchronized boolean isBottomCardsRevealed() {
         return bottomCardsRevealed;
     }
@@ -272,7 +240,7 @@ public class GameSession {
         return Collections.unmodifiableList(eventLogs);
     }
 
-    public synchronized Map<Integer, PimcAiPlayer.DecisionResult> getLastAiThoughts() {
+    public synchronized Map<Integer, AiDecision> getLastAiThoughts() {
         return Collections.unmodifiableMap(lastAiThoughts);
     }
 
@@ -377,9 +345,7 @@ public class GameSession {
         }
 
         PublicView view = gameState.getPublicView(activeId);
-        AiPlayer ai = (activeId == 1) ? aiPlayer1 : aiPlayer2;
-
-        PimcAiPlayer.DecisionResult result = ai.decide(view);
+        AiDecision result = aiPlayer.decide(view);
         Move chosen = result.getSelectedMove();
         lastAiThoughts.put(activeId, result);
 
