@@ -48,10 +48,10 @@ jobs:
           -DFAKELUA_BUILD_TESTS=OFF \
           -DFAKELUA_BUILD_BENCHMARKS=OFF
 
-    # 只要 libfakelua: 宿主是自带的 doudizhu_server, 不用 flua
+    # 宿主只链 libfakelua, 但 install 规则里包含 flua, 所以两个都要编出来
     - name: Build fakelua
       working-directory: fakelua
-      run: cmake --build build --target fakelua
+      run: cmake --build build --target fakelua flua
 
     - name: Install fakelua
       working-directory: fakelua

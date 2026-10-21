@@ -96,7 +96,9 @@ local function session_id(req)
         end
     end
     if not valid_session(sid) then
+        -- 客户端没带合法会话号时现造一个; 两次随机取值, 避免同一秒新建的两个浏览器撞上同一局
         sid = "sess" .. tostring(os.time()) .. tostring(math.random(100000, 999999))
+            .. tostring(math.random(100000, 999999))
     end
     return sid
 end
@@ -126,9 +128,8 @@ local function mime(path)
     return "application/octet-stream"
 end
 
--- 静态资源也计数: 一次页面加载要连着拉 css/js, 别让它们掉进慢节拍
+-- 静态资源也要算进活跃计数, 但计数已在 OnRequest 里做过一次
 local function serve_static(path)
-    served:set("n", ServedCount() + 1)
     if path == "/" or path == "" then
         path = "/index.html"
     end
