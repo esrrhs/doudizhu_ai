@@ -1,7 +1,7 @@
 {
   "byteOrder": "little",
   "dtype": "float32",
-  "gateOrder": "LSTM gates are concatenated as i, h, f, c on the input and hidden halves",
+  "gateOrder": "LSTM weight chunks are ordered i (input gate), f (forget gate), g (cell candidate), o (output gate)",
   "parameters": [
     {
       "entry": 0,

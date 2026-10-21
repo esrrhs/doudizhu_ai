@@ -34,6 +34,9 @@ python3 tools/export_actor.py extract --in data/models/latest --out /tmp/params
 也不需要额外再存一份 `.bin`（避免权重翻倍）。清单的正确性已在训练机上用 `torch.equal`
 逐层比对 `entry i` 与 `named_parameters()[i]` 验证过。
 
+> 坑：LSTM 四段的顺序是 PyTorch 文档口径的 **i, f, g, o**（`g` 是候选细胞值），
+> 不是 cuDNN 习惯写的 i,h,f,c。按错顺序手搭前向，logit 会偏到 1~1900 的量级、argmax 错约 89 处。
+
 `script` 阶段带 `--golden` 时会顺手回放基准记录，报告与 C++ 的偏差：
 
 ```bash
