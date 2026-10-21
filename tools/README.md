@@ -111,7 +111,7 @@ Java 侧的读取器在 `src/test/java/com/doudizhu/nn/GoldenReader.java`。
 
 当前基线（24 局 712 个决策）：
 
-- 候选动作集合：与 C++ **完全相等**（多重集比较，两侧枚举顺序不同）
+- 候选动作集合：与 C++ **完全相等**（按 45 位多重集比较，不依赖下标顺序；实测顺序也一致）
 - `xImp` / `seq` / 每个 `actionFeat`：**逐位相等**
 - logits：最大偏差 **2.7e-4**（纯跨 libtorch 版本的浮点噪声）
 - argmax：**0 处不一致**

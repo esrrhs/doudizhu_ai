@@ -109,9 +109,8 @@ Go 侧只用标准库 `archive/zip` + `encoding/json` 读取,并按形状校验�
 `joint = concat(node, actionFeat[186])` → `relu(l1)` → `relu(l2)` → `relu(l3)` → `relu(l4)` → `head`。
 LSTM 取门顺序 **i, f, g, o**(即 PyTorch `weight_ih_l0` 的实际拼接顺序)。
 
-> 注意:`actor{N}_manifest.json` 里的 `gateOrder` 文字写的是 `"i, h, f, c"`,那是 PyTorch 内部
-> `_lstm_gate` 的旧命名,**与实际不符**:按该顺序解码时 logits 与 golden 差到 1~1900,按
-> `i, f, g, o` 解码时逐位吻合。以 golden 基准为准,Go 与后续 C++ 移植都应按 `i, f, g, o` 实现。
+> 坑:`gateOrder` 一度被写成 cuDNN 习惯的 `"i, h, f, c"`,那会让 logits 偏到 1~1900、约 89 处
+> argmax 出错。清单已改为 `i, f, g, o`,加载时会校验该字段,不符合直接报错而不是静默跑偏。
 
 ## 与 Java 的差异
 
