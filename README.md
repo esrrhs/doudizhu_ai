@@ -116,8 +116,9 @@ python3 tools/export_actor.py extract --in models/latest --out /tmp/params
 python3 tools/export_actor.py script --in /tmp/params --out models/ts
 ```
 
-`export_actor.py`（重建导出）与 `pddump.cpp`（逐决策基准数据导出）位于
-[PerfectDouCPP](https://github.com/esrrhs/PerfectDouCPP) 的 `tools/` 目录。
+两个脚本都在本仓库 [tools/](tools/README.md)：`export_actor.py` 负责重建导出，
+`pddump.cpp` 负责生成 `src/test/resources/golden/` 里的逐决策基准记录（只有训练侧特征或网络结构
+变了才需要重新生成）。步骤、编译命令、记录格式与踩坑记录见 [tools/README.md](tools/README.md)。
 
 ---
 
@@ -129,6 +130,7 @@ doudizhu_ai/
 ├── models/
 │   ├── latest/                               # 训练机导出的原始权重 (仅参数, 无 forward)
 │   └── ts/                                   # 可推理的 TorchScript 权重 (DJL 加载)
+├── tools/                                    # 权重导出与基准记录生成脚本 (不参与运行时)
 ├── src/
 │   ├── main/
 │   │   ├── java/com/doudizhu/
