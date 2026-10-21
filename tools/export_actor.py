@@ -31,6 +31,11 @@ NODE_IN = 1676
 ACTION_IN = 186
 HIDDEN = 256
 
+LSTM_GATE_ORDER = (
+    "LSTM weight chunks are ordered i (input gate), f (forget gate), "
+    "g (cell candidate), o (output gate)"
+)
+
 PARAM_NAMES = [
     "lstm.weight_ih_l0", "lstm.weight_hh_l0", "lstm.bias_ih_l0", "lstm.bias_hh_l0",
     "l1.weight", "l1.bias", "l2.weight", "l2.bias", "l3.weight", "l3.bias",
@@ -187,7 +192,7 @@ def write_manifest(model: "Actor", dst: str, seat: int) -> None:
         "root": f"actor{seat}",
         "dtype": "float32",
         "byteOrder": "little",
-        "gateOrder": "LSTM gates are concatenated as i, h, f, c on the input and hidden halves",
+        "gateOrder": LSTM_GATE_ORDER,
         "parameters": [{"entry": i, "name": name, "shape": list(t.shape)}
                        for i, (name, t) in enumerate(model.named_parameters())],
     }
