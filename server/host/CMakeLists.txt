@@ -18,15 +18,18 @@ add_subdirectory(../../cpp ${CMAKE_CURRENT_BINARY_DIR}/cpp)
 
 option(FAKELUA_BUILD_TESTS "构建 fakelua 单元测试" OFF)
 option(FAKELUA_BUILD_BENCHMARKS "构建 fakelua benchmark" OFF)
-# 系统里可能同时有多个前缀装过 fakelua (/usr/local 与 /opt/homebrew), 只认这里指定的那个
+# 系统里可能同时有多个前缀装过 fakelua (/usr/local 与 /opt/homebrew), 只认这里指定的那个。
+# PATH_SUFFIXES 里带上 Debian/Ubuntu 的 multiarch 目录, 那里 GNUInstallDirs 会把
+# lib/cmake/fakelua 装成 lib/x86_64-linux-gnu/cmake/fakelua。
 set(FAKELUA_PREFIX "/opt/homebrew" CACHE PATH "已安装 fakelua 的前缀")
-find_package(fakelua CONFIG QUIET HINTS "${FAKELUA_PREFIX}/lib/cmake/fakelua" NO_DEFAULT_PATH)
+find_package(fakelua CONFIG QUIET HINTS "${FAKELUA_PREFIX}"
+        PATH_SUFFIXES lib lib64 lib/x86_64-linux-gnu NO_DEFAULT_PATH)
 if(NOT fakelua_FOUND)
     if(NOT FAKELUA_DIR)
         message(FATAL_ERROR
-            "找不到已安装的 fakelua。二选一:\n"
+            "在 ${FAKELUA_PREFIX} 找不到 fakeluaConfig.cmake。二选一:\n"
             "  1) 在 fakelua 源码目录 cmake --install build --prefix ${FAKELUA_PREFIX}\n"
-            "  2) 配置时加 -DFAKELUA_DIR=/path/to/fakelua")
+            "  2) 配置时加 -DFAKELUA_PREFIX=/other/prefix 或 -DFAKELUA_DIR=/path/to/fakelua")
     endif()
     add_subdirectory(${FAKELUA_DIR} ${CMAKE_CURRENT_BINARY_DIR}/fakelua)
 endif()
