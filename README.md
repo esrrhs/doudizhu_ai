@@ -149,6 +149,8 @@ auto d = policy.Decide(state.GetPublicView(active));
 
 ## 🌐 Web platform (FakeLua)
 
+Live at <https://doudizhu.esrrhs.xyz> (deployment steps in [server/README.md](server/README.md)).
+
 One human (seat 0) versus two policy-network AIs: random landlord bidding, bottom cards reveal,
 move hints, an AI reasoning panel, a card counter, a game log, and per-session isolation.
 
