@@ -43,7 +43,6 @@
         <assertj.version>3.25.3</assertj.version>
         <slf4j.version>2.0.12</slf4j.version>
         <logback.version>1.5.3</logback.version>
-        <jackson.version>2.17.0</jackson.version>
         <djl.version>0.39.0</djl.version>
         <pytorch.version>2.7.1</pytorch.version>
     </properties>
@@ -59,13 +58,6 @@
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
             <version>${logback.version}</version>
-        </dependency>
-
-        <!-- JSON -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-            <version>${jackson.version}</version>
         </dependency>
 
 

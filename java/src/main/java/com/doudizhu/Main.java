@@ -11,7 +11,6 @@ import com.doudizhu.model.Move;
 import com.doudizhu.model.Rank;
 import com.doudizhu.nn.ActorNetwork;
 import com.doudizhu.rules.Deck;
-import com.doudizhu.web.GameHttpServer;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -20,53 +19,24 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * 斗地主 AI 运行入口。
+ * 斗地主 AI 运行入口: 三个 AI 自对弈一局的命令行演示。
  *
- * <p>默认启动本地 Web 网页对战平台 (http://localhost:8080)，两个 AI 座位由强化学习策略网络驱动；
- * {@code --cli} 则跑一局三个 AI 的命令行演示。
+ * <p>网页对战平台不在这里 —— 它与 Go/C++ 三套实现共用的前端由 {@code server/} (fakelua 宿主) 提供。
  *
- * <p>参数: {@code --cli} / {@code --port=8080} / {@code --model-dir=models/ts}
+ * <p>参数: {@code --model-dir=data/models/ts}
  */
 public class Main {
 
     public static void main(String[] args) throws Exception {
-        boolean runCli = false;
-        int port = 8080;
         Path modelDir = NeuralAiPlayer.defaultModelDir();
 
         for (String arg : args) {
-            if ("--cli".equalsIgnoreCase(arg)) {
-                runCli = true;
-            } else if (arg.startsWith("--port=")) {
-                port = Integer.parseInt(arg.substring("--port=".length()));
-            } else if (arg.startsWith("--model-dir=")) {
+            if (arg.startsWith("--model-dir=")) {
                 modelDir = Path.of(arg.substring("--model-dir=".length()));
             }
         }
 
-        if (runCli) {
-            runCliSimulation(modelDir);
-        } else {
-            startWebServer(port, modelDir);
-        }
-    }
-
-    private static void startWebServer(int port, Path modelDir) throws Exception {
-        try (ActorNetwork network = ActorNetwork.load(modelDir)) {
-            AiPlayer neural = new NeuralAiPlayer(network);
-            GameHttpServer server = new GameHttpServer(port, neural);
-            server.start();
-
-            System.out.println("👉 AI 引擎: 强化学习策略网络，权重目录 " + modelDir.toAbsolutePath());
-            System.out.println("👉 服务已就绪，浏览器访问 http://localhost:" + port);
-            System.out.println("按 Ctrl+C 可停止网页端服务。");
-
-            // 保持主线程存活
-            Thread.currentThread().join();
-        } catch (Exception e) {
-            System.err.println("启动 Web 服务失败: " + e.getMessage());
-            e.printStackTrace();
-        }
+        runCliSimulation(modelDir);
     }
 
     private static void runCliSimulation(Path modelDir) throws Exception {

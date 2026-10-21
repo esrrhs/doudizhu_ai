@@ -30,10 +30,13 @@ else()
     target_compile_options(doudizhu PRIVATE -Wall -Wextra -ffp-contract=off)
 endif()
 
+option(DOUDIZHU_BUILD_TESTS "构建与 Java/Go 的逐位对齐测试" ON)
+
 enable_testing()
 
 # 基准记录是 gzip 文本: 测试优先用系统 zlib 读 .gz;
 # 若同目录已解压出 golden24.txt, 则不需要 zlib。
+if(DOUDIZHU_BUILD_TESTS)
 add_executable(doudizhu_parity_test test/parity_test.cpp)
 target_link_libraries(doudizhu_parity_test PRIVATE doudizhu)
 target_include_directories(doudizhu_parity_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -52,3 +55,4 @@ endif()
 # 测试工作目录固定为 cpp/, 使 FindSharedData 能找到 ../data
 add_test(NAME parity COMMAND doudizhu_parity_test
          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
