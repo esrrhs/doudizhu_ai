@@ -1,0 +1,274 @@
+package "DoudizhuHttp"
+
+-- HTTP 路由与静态资源。所有牌局动作都转给 DoudizhuGame, 这里只管收发与错误码。
+--
+-- 接口与 Java 版 GameHttpServer 完全一致 (前端 static/ 就是那一版的, 不用改):
+--   GET  /api/game/state            当前视角的完整状态
+--   POST /api/game/new              新开一局; ?mode=direct&landlordId=n 跳过叫分
+--   POST /api/game/bid   {"call":true|false}
+--   POST /api/game/play  {"cards":["3","3","4"]}
+--   POST /api/game/pass
+--   POST /api/game/ai-step          让当前 AI 行动一步 (叫分或出牌)
+--   GET  /api/game/hint             AI 给真人的一步提示
+-- 会话用 X-Session-Id 头隔离, 同一浏览器固定一个 id。
+
+local static_root = "static"
+
+-- 已派发的请求数。文件级 local 落在常量区不可写, 计数放 container.map(C++ 堆)。
+local served = container.map()
+
+-- 会话表在 DoudizhuGame 那边, 这里只负责认出请求属于哪个会话
+local SESSION_MAX_LEN = 64
+
+function ServedCount()
+    return served:get("n") or 0
+end
+
+local function cors_headers()
+    local h = {}
+    h["Access-Control-Allow-Origin"] = "*"
+    h["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    h["Access-Control-Allow-Headers"] = "Content-Type, X-Session-Id"
+    h["Content-Type"] = "application/json; charset=UTF-8"
+    return h
+end
+
+local function respond(status, body, extra)
+    local resp = {}
+    resp["status"] = status
+    local h = cors_headers()
+    if extra ~= nil then
+        local k = 1
+        while k <= #extra do
+            h[extra[k][1]] = extra[k][2]
+            k = k + 1
+        end
+    end
+    resp["headers"] = h
+    resp["body"] = body
+    return resp
+end
+
+local function json_ok(body_tbl, sid)
+    return respond(200, json.encode(body_tbl), { { "X-Session-Id", sid } })
+end
+
+-- 业务错误也带状态回来, 前端把 error 弹成 toast (与 Java 版的 400 + DTO 一致)
+local function json_err(status, tbl, sid)
+    return respond(status, json.encode(tbl), { { "X-Session-Id", sid } })
+end
+
+local function json_raw(status, text)
+    return respond(status, text, nil)
+end
+
+local function parse_body(body)
+    if body == nil or body == "" then
+        return {}
+    end
+    local ok, t = pcall(function()
+        return json.decode(body)
+    end)
+    if ok and type(t) == "table" then
+        return t
+    end
+    return {}
+end
+
+-- 只接受 [A-Za-z0-9_-] 的会话号且限长: 会话表是宿主机上的常驻 map, 不能被
+-- 任一路人用超长或重复的键撑爆。
+local function valid_session(sid)
+    if sid == nil then
+        return false
+    end
+    if #sid < 1 or #sid > SESSION_MAX_LEN then
+        return false
+    end
+    return string.match(sid, "^[A-Za-z0-9_%-]+$") ~= nil
+end
+
+local function session_id(req)
+    local sid = nil
+    if req.headers ~= nil then
+        sid = req.headers["X-Session-Id"]
+        if sid == nil then
+            sid = req.headers["x-session-id"]
+        end
+    end
+    if not valid_session(sid) then
+        sid = "sess" .. tostring(os.time()) .. tostring(math.random(100000, 999999))
+    end
+    return sid
+end
+
+-- query 形如 mode=direct&landlordId=1; url.decode_query 解出键值表
+local function parse_query(q)
+    if q == nil or q == "" then
+        return {}
+    end
+    local ok, t = pcall(function()
+        return url.decode_query(q)
+    end)
+    if ok and type(t) == "table" then
+        return t
+    end
+    return {}
+end
+
+local function mime(path)
+    if string.ends_with(path, ".html") then return "text/html; charset=UTF-8" end
+    if string.ends_with(path, ".css") then return "text/css; charset=UTF-8" end
+    if string.ends_with(path, ".js") then return "application/javascript; charset=UTF-8" end
+    if string.ends_with(path, ".svg") then return "image/svg+xml" end
+    if string.ends_with(path, ".png") then return "image/png" end
+    if string.ends_with(path, ".ico") then return "image/x-icon" end
+    if string.ends_with(path, ".json") then return "application/json; charset=UTF-8" end
+    return "application/octet-stream"
+end
+
+-- 静态资源也计数: 一次页面加载要连着拉 css/js, 别让它们掉进慢节拍
+local function serve_static(path)
+    served:set("n", ServedCount() + 1)
+    if path == "/" or path == "" then
+        path = "/index.html"
+    end
+    -- 只按字面拼路径, 带 .. 的一律拒绝 (fakelua 没有 realpath)
+    if string.find(path, "..", 1, true) ~= nil then
+        return json_raw(404, "404 Not Found")
+    end
+    local f = io.open(static_root .. path, "rb")
+    if f == nil then
+        return json_raw(404, "404 Not Found")
+    end
+    local body = f:read("*a")
+    f:close()
+    local resp = {}
+    resp["status"] = 200
+    local h = {}
+    h["Content-Type"] = mime(path)
+    h["Access-Control-Allow-Origin"] = "*"
+    resp["headers"] = h
+    resp["body"] = body
+    return resp
+end
+
+-- DTO 里的 error 非空时按 400 回, 前端据此弹 toast 而不是当成正常状态
+local function reply(dto, sid)
+    if dto == nil then
+        return json_err(500, { error = "服务内部状态异常" }, sid)
+    end
+    if dto.error ~= nil then
+        return json_err(400, dto, sid)
+    end
+    return json_ok(dto, sid)
+end
+
+local function with_state(sid, message)
+    return DoudizhuGame.View(sid, message)
+end
+
+function OnRequest(typ, connid, req)
+    if typ ~= "request" then
+        return nil
+    end
+    served:set("n", ServedCount() + 1)
+
+    local method = req.method
+    local path = req.path
+    if method == "OPTIONS" then
+        return respond(204, "", nil)
+    end
+
+    -- 存活探针: 会话数与宿主牌局数应当同量级 (牌局只在会话重开与闲置回收时释放)
+    if path == "/api/status" then
+        return json_ok({ status = "ok", backend = doudizhu.version(),
+                         sessions = DoudizhuGame.Count(), games = doudizhu.sessions() }, "")
+    end
+
+    if string.starts_with(path, "/api/game") then
+        local sid = session_id(req)
+        local body = parse_body(req.body)
+        local query = parse_query(req.query)
+
+        if path == "/api/game/state" then
+            return reply(with_state(sid, nil), sid)
+        end
+
+        if path == "/api/game/new" then
+            if method ~= "POST" then
+                return json_raw(405, "405 Method Not Allowed")
+            end
+            local direct = query["mode"] == "direct"
+            local landlord = math.floor(tonumber(query["landlordId"]) or -1)
+            if body["mode"] == "direct" then
+                direct = true
+                landlord = math.floor(tonumber(body["landlordId"]) or landlord)
+            end
+            DoudizhuGame.New(sid, direct, landlord)
+            local msg = "新对局已发牌，进入叫地主阶段！"
+            if direct then
+                msg = "快捷新对局已就绪！"
+            end
+            return reply(with_state(sid, msg), sid)
+        end
+
+        if path == "/api/game/bid" then
+            if method ~= "POST" then
+                return json_raw(405, "405 Method Not Allowed")
+            end
+            local err = DoudizhuGame.Bid(sid, body["call"] == true)
+            if err ~= nil then
+                local dto = with_state(sid, nil)
+                dto.error = err
+                return reply(dto, sid)
+            end
+            local msg = "你叫了地主！"
+            if body["call"] ~= true then
+                msg = "你选择不叫"
+            end
+            return reply(with_state(sid, msg), sid)
+        end
+
+        if path == "/api/game/play" then
+            if method ~= "POST" then
+                return json_raw(405, "405 Method Not Allowed")
+            end
+            local err = DoudizhuGame.HumanPlay(sid, body["cards"])
+            if err ~= nil then
+                local dto = with_state(sid, nil)
+                dto.error = err
+                return reply(dto, sid)
+            end
+            return reply(with_state(sid, "出牌成功！"), sid)
+        end
+
+        if path == "/api/game/pass" then
+            if method ~= "POST" then
+                return json_raw(405, "405 Method Not Allowed")
+            end
+            local err = DoudizhuGame.HumanPass(sid)
+            if err ~= nil then
+                local dto = with_state(sid, nil)
+                dto.error = err
+                return reply(dto, sid)
+            end
+            return reply(with_state(sid, "已过牌"), sid)
+        end
+
+        if path == "/api/game/ai-step" then
+            if method ~= "POST" then
+                return json_raw(405, "405 Method Not Allowed")
+            end
+            local action = DoudizhuGame.AiStep(sid)
+            return reply(with_state(sid, "AI 决策: " .. tostring(action)), sid)
+        end
+
+        if path == "/api/game/hint" then
+            return json_ok(DoudizhuGame.Hint(sid), sid)
+        end
+
+        return json_raw(404, "404 Not Found")
+    end
+
+    return serve_static(path)
+end

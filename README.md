@@ -1,16 +1,82 @@
-# 斗地主 AI (doudizhu_ai)
+# Dou Dizhu AI (doudizhu_ai)
 
 [![License](https://img.shields.io/github/license/esrrhs/doudizhu_ai)](https://github.com/esrrhs/doudizhu_ai)
-[![Language](https://img.shields.io/github/languages/top/esrrhs/doudizhu_ai)](https://github.com/esrrhs/doudizhu_ai)
 [![Maven Central](https://img.shields.io/maven-central/v/com.github.esrrhs/doudizhu_ai)](https://central.sonatype.com/artifact/com.github.esrrhs/doudizhu_ai)
-[![Build Status](https://github.com/esrrhs/doudizhu_ai/actions/workflows/maven.yml/badge.svg?branch=master)](https://github.com/esrrhs/doudizhu_ai/actions)
+[![Java CI](https://github.com/esrrhs/doudizhu_ai/actions/workflows/maven.yml/badge.svg?branch=master)](https://github.com/esrrhs/doudizhu_ai/actions/workflows/maven.yml)
+[![Go CI](https://github.com/esrrhs/doudizhu_ai/actions/workflows/go.yml/badge.svg?branch=master)](https://github.com/esrrhs/doudizhu_ai/actions/workflows/go.yml)
+[![C++ CI](https://github.com/esrrhs/doudizhu_ai/actions/workflows/cpp.yml/badge.svg?branch=master)](https://github.com/esrrhs/doudizhu_ai/actions/workflows/cpp.yml)
+[![Server CI](https://github.com/esrrhs/doudizhu_ai/actions/workflows/server.yml/badge.svg?branch=master)](https://github.com/esrrhs/doudizhu_ai/actions/workflows/server.yml)
 
-**Java 17** 实现的斗地主 AI 引擎与本地网页对战平台。出牌由**强化学习策略网络**驱动（PerfectDou 式自对弈训练），
-叫地主采用随机叫分，规则引擎与牌局状态机保持纯 Java、无第三方依赖。
+*中文版: [README_CN.md](README_CN.md)*
+
+Three independent implementations of a Dou Dizhu (Fight the Landlord) AI engine
+(Java 17 / Go 1.21 / C++20) plus a **playable web client** built on
+[FakeLua](https://github.com/esrrhs/fakelua). Card play is driven by a reinforcement-learning
+policy network (PerfectDou-style self-play, weights checked into this repo); the landlord bid is random.
+All three languages share one set of weights and one golden fixture and agree on the logits and the chosen
+move across 712 real decisions.
 
 ---
 
-## 📦 依赖引入
+## 📂 Layout
+
+```text
+doudizhu_ai/
+├── java/            # Java 17, Maven coordinate com.github.esrrhs:doudizhu_ai
+│   └── src/main/java/com/doudizhu/{model,rules,game,ai,nn}/  + Main.java (3-AI self-play demo)
+├── go/              # Go 1.21, zero third-party deps (hand-written forward pass, no cgo/ONNX)
+├── cpp/             # C++20, zero third-party deps (own zip parsing + hand-written forward pass)
+├── server/          # web platform: Lua business logic + C++ host + frontend
+│   ├── lua/  host/  static/  tests/  API.md  README.md
+├── data/
+│   ├── models/latest/   # raw training output (parameters only, no forward)
+│   ├── models/ts/       # runnable TorchScript weights + per-layer manifests (shared, 13 MB)
+│   └── golden/          # per-decision fixture exported from the training side (shared, 304 KB)
+└── tools/           # weight re-export and fixture generation (not part of runtime)
+```
+
+Rules, game state machine and feature encoding are implemented separately in each language;
+only the **weights** and the **golden fixture** are shared.
+
+---
+
+## 🎯 What "parity" means here
+
+Parity is a contract written into the tests, not a vibe. The fixture
+`data/golden/golden24.txt.gz` holds 24 games, 712 decisions and 6,460 candidate moves,
+dumped from the training side by `tools/pddump.cpp`:
+
+| Checked | Requirement |
+|---|---|
+| Candidate set | identical to the training side (compared as 45-bit multisets, including every concrete airplane / four-plus-two kicker combination) |
+| `xImp` / `seq` / `actionFeat` | **bit-identical**, no tolerance |
+| logits | max absolute deviation < 1e-3 |
+| argmax move | must match exactly |
+
+Measured by each language's own test run:
+
+| Implementation | Max logit deviation | argmax mismatches | Avg decision |
+|---|---|---|---|
+| Java (libtorch via DJL) | 2.747e-4 | 0 | 0.84 ms |
+| Go (hand-written forward) | 4.883e-4 | 0 | 7.80 ms |
+| C++ (hand-written forward) | 5.188e-4 | 0 | ~1 ms |
+
+The residual comes only from floating-point summation order, so the C++ build forces
+`-ffp-contract=off` and the tolerance has never been loosened. `server/` reuses the C++ engine,
+so the served moves are bit-identical to `cpp/`.
+
+---
+
+## 🚀 Using each implementation
+
+### Java
+
+```bash
+cd java
+./mvnw clean test                    # 9 tests, including bit-level parity with the training side
+./mvnw exec:java                     # command-line demo: three AIs play one game
+./mvnw exec:java -Dexec.args="--model-dir=/path/to/weights"
+```
 
 ```xml
 <dependency>
@@ -20,13 +86,9 @@
 </dependency>
 ```
 
-```groovy
-implementation 'com.github.esrrhs:doudizhu_ai:1.1.0'
-```
-
-规则引擎（`rules` / `game` / `model`）零依赖，可直接引用。
-出牌 AI 需要原生 libtorch，而 DJL 相关依赖在本项目 pom 里标记为 `optional`、**不会传递给下游**，
-因此使用 `NeuralAiPlayer` 时须自行补齐引擎与本机平台的原生库：
+The rules engine (`model` / `rules` / `game`) has no dependencies. The play AI needs native libtorch,
+and the DJL dependencies are marked `optional` in the pom — they do **not** propagate to consumers — so
+using `NeuralAiPlayer` means adding the engine and your platform's native library yourself:
 
 ```xml
 <dependency>
@@ -34,7 +96,7 @@ implementation 'com.github.esrrhs:doudizhu_ai:1.1.0'
     <artifactId>pytorch-engine</artifactId>
     <version>0.39.0</version>
 </dependency>
-<!-- 显式绑定平台原生库，否则 DJL 会在首次运行时下载到 ~/.djl.ai -->
+<!-- pin the native library explicitly, otherwise DJL downloads it into ~/.djl.ai on first use -->
 <dependency>
     <groupId>ai.djl.pytorch</groupId>
     <artifactId>pytorch-native-cpu</artifactId>
@@ -50,118 +112,111 @@ implementation 'com.github.esrrhs:doudizhu_ai:1.1.0'
 </dependency>
 ```
 
-> 权重必须用与加载方一致的主版本导出（本工程固定 libtorch **2.7.1**，DJL 0.39 的最新原生库），
-> 详见「权重的来源与再导出」。
+Weights must be exported with the same libtorch major version that loads them (this project is pinned
+to **2.7.1**, the newest native library in DJL 0.39).
+
+### Go
+
+```bash
+cd go && go test ./...      # 21 tests, zero third-party dependencies
+```
+
+```go
+import ddz "github.com/esrrhs/doudizhu_ai/go"
+
+policy, err := ddz.Load()                        // weights directory is located from the repo layout
+move, logits, err := policy.Decide(view)         // enumerate all candidates, take the highest score
+```
+
+### C++
+
+```bash
+cd cpp
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+ctest --test-dir build --output-on-failure
+```
+
+```cpp
+#include "doudizhu/api.h"
+
+doudizhu::Policy policy;
+policy.Load(doudizhu::Policy::DefaultModelDir());
+auto d = policy.Decide(state.GetPublicView(active));
+```
 
 ---
 
-## 🌟 核心特性
+## 🌐 Web platform (FakeLua)
 
-### 1. 强化学习策略网络出牌
-- **权重来源**：由 [PerfectDouCPP](https://github.com/esrrhs/PerfectDouCPP) 自对弈强化学习训练，按座位（地主 / 地主下家 / 地主上家）各一个网络，仓库 `data/models/` 已附带；
-- **决策方式**：完整枚举当前所有合法走法（含飞机、四带二的**全部具体带牌组合**），逐手打分后直接取最高分，单次推理毫秒级；
-- **只用公开信息**：观察特征为我的手牌、两家合计的未知牌、各家已出与最近一手、底牌剩余、最近 30 手历史、剩余手数等，**不读取任何玩家的私有手牌**；
-- **移植校验**：测试内与 C++ 训练侧逐位对齐——候选动作集合、全部输入特征、logits（最大偏差 2.7e-4）与 argmax（712 个决策零不一致）。
+One human (seat 0) versus two policy-network AIs: random landlord bidding, bottom cards reveal,
+move hints, an AI reasoning panel, a card counter, a game log, and per-session isolation.
 
-### 2. 随机叫地主
-每家独立以 **1/3** 概率表态叫地主，最先叫的一家当地主并拿走 3 张底牌；三家都不叫则流局重发。
-叫分与牌力无关，地主也可能拿到很弱的牌。真人仍可自己选择叫或不叫。
+```bash
+cd server
+cmake -S host -B host/build -DCMAKE_BUILD_TYPE=Release   # needs fakelua installed, see server/README.md
+cmake --build host/build -j
+DOUDIZHU_PORT=8080 ./host/build/doudizhu_server lua      # http://localhost:8080
+python3 tests/api_test.py                               # 12 HTTP cases
+```
 
-### 3. 网页端交互对战平台（1 真人 vs 2 AI）
-- 发牌、随机叫分、底牌翻开、专属出牌区与「不出/PASS」区；
-- **💡 智能提示**：一键获取神经网络推荐的着法并高亮手牌；
-- **🔍 AI 思路面板**：展示候选动作及其 **softmax 策略概率**（模型偏好，不是搜索胜率）；
-- **📊 记牌器与对局日志**、多 Session 并发隔离。
-
-### 4. 规范的斗地主规则引擎
-54 张牌，地主 20 张、农民各 17 张、底牌 3 张；支持单张、对子、三张、三带一、三带二、
-单顺（5 张起）、双顺（3 对起）、飞机（2 个连续三张起，可带单/带对）、四带二、炸弹、王炸；
-农民阵营任意一家先出完则两位农民同胜。
+Rules and inference stay in C++; Lua only handles HTTP, sessions and flow.
+The contract is documented in [server/API.md](server/API.md).
+Measured on macOS arm64: ~35 MB resident, loopback request p50 ~4 ms, decision p50 ~2 ms.
 
 ---
 
-## 🚀 快速开始
+## 🧠 Weights and re-export
 
-### 环境依赖
-JDK 17+，Apache Maven 3.5+
-
-### 1. 启动网页端对战平台
-```bash
-cd java
-./mvnw exec:java                            # http://localhost:8080
-./mvnw exec:java -Dexec.args="--port=8088"
-./mvnw exec:java -Dexec.args="--model-dir=/path/to/weights"
-```
-
-### 2. 命令行 AI 演示（三个 AI 自动打一局）
-```bash
-cd java && ./mvnw exec:java -Dexec.args="--cli"
-```
-
-### 3. 运行测试
-```bash
-cd java && ./mvnw clean test
-```
-其中 `PerfectDouFeaturesGoldenTest` / `ActorNetworkGoldenTest` 会读取 `data/golden/` 里由 C++ 导出的
-基准记录做逐位对齐校验，需要原生库可用。
-
-### 4. 权重的来源与再导出
-`data/models/latest` 是训练机直接产出的权重，`data/models/ts` 是 Java 侧可推理的 TorchScript 权重。
-训练侧用 libtorch `OutputArchive` 保存，**只有参数、没有 forward**，任何 TorchScript 运行时都无法直接调用，
-因此需要一次重建导出：
+`data/models/latest` is what the training machine writes through a libtorch `OutputArchive`:
+**parameters only, no forward**, so no TorchScript runtime can call it directly. It has to be rebuilt:
 
 ```bash
-# 1) 用训练侧的 PyTorch 版本抽出参数
+# 1) extract the parameters with the same PyTorch version the training side used
 python3 tools/export_actor.py extract --in data/models/latest --out /tmp/params
-# 2) 用与原生库一致的版本 (2.7.1) 重建并脚本化
+# 2) rebuild and script with the version that matches the native library (2.7.1 here)
 python3 tools/export_actor.py script --in /tmp/params --out data/models/ts
 ```
 
-两个脚本都在本仓库 [tools/](tools/README.md)：`export_actor.py` 负责重建导出，
-`pddump.cpp` 负责生成 `data/golden/` 里的逐决策基准记录（只有训练侧特征或网络结构变了才需要重新生成）。步骤、编译命令、记录格式与踩坑记录见 [tools/README.md](tools/README.md)。
+`export_actor.py` also writes `actor<N>_manifest.json`. A TorchScript zip stores tensors as **STORED
+(uncompressed)** entries, so the manifest maps "entry index → layer → shape" and Go/C++ can load the
+weights with nothing but a standard-library zip reader. The fixture comes from `tools/pddump.cpp`.
+Steps, record format and the traps (the LSTM gate chunks are ordered **i, f, g, o**; getting it wrong
+produces deviations in the thousands) are in [tools/README.md](tools/README.md).
 
 ---
 
-## 📂 项目结构
+## 🃏 Rules and bidding
 
-```text
-doudizhu_ai/
-├── java/                          # Java 实现（当前参照实现，Maven 坐标 com.github.esrrhs:doudizhu_ai）
-│   ├── pom.xml  mvnw  .mvn/       # Java 17, Central 发布, GPG 签名
-│   └── src/main/java/com/doudizhu/
-│       ├── model/                 # 领域模型 (Rank, Role, CardType, Move, Hand)
-│       ├── rules/                 # 规则与牌库 (Deck, MoveGenerator)
-│       ├── game/                  # 牌局状态机与信息视角 (GameState, Player, PublicView)
-│       ├── ai/                    # AiPlayer / AiDecision / NeuralAiPlayer / BidRule
-│       ├── nn/                    # 特征编码、完整动作枚举、手数 oracle、DJL 推理封装
-│       ├── web/                   # Web 会话与 HTTP 服务 (GameSession, GameHttpServer)
-│       └── Main.java              # 启动入口
-│       src/main/resources/static/ # 前端 (index.html, style.css, app.js)
-│       src/test/java/…/nn/        # 与训练侧的逐位对齐测试
-├── go/                            # Go 实现（纯 Go 前向，规划中）
-├── cpp/                           # C++ 实现（libtorch 精简推理库，规划中）
-├── server/                        # fakelua 服务（Lua 牌局流程 + 原生推理，规划中）
-├── data/
-│   ├── models/latest/             # 训练机导出的原始权重（仅参数，无 forward）
-│   ├── models/ts/                 # 可推理的 TorchScript 权重（各语言共用）
-│   └── golden/                    # 训练侧导出的逐决策基准记录（各语言共用）
-└── tools/                         # 权重导出与基准记录生成脚本（不参与运行时）
-```
+54 cards; the landlord holds 20, each farmer 17, with 3 bottom cards. Supported shapes: single, pair,
+triple, triple-plus-one, triple-plus-pair, straight (5+), pair chain (3+), airplane (2+ consecutive
+triples, with or without kickers), four-plus-two, bomb and rocket. If either farmer empties their hand
+first, both farmers win.
+
+During bidding each player (including both AIs) calls landlord **independently with probability 1/3**;
+the first caller becomes the landlord and takes the 3 bottom cards. If nobody calls, the deal is void and
+the first caller position rotates. Bidding ignores hand strength.
+
+The policy network sees public information only (own hand, the combined unknown cards of the other two,
+what each player has played and the last move, remaining bottom cards, the last 30 moves, remaining
+trick counts) and **never reads another player's private hand**. The numbers in the UI are softmax
+**policy probabilities** (model preference), not search win rates.
 
 ---
 
-## 📝 版本说明
+## 📝 Notes on the previous engine
 
-早期版本的出牌引擎是 **PIMC 采样 + 2v1 协同 MCTS 搜索**，并配有手牌形态启发与硬护栏；
-策略网络在配对对局（同牌两局、角色互换）中对其胜率为：
+The original play engine was **PIMC sampling plus a 2v1 cooperative MCTS search**, with hand-shape
+heuristics and hard guardrails. In paired matches (same deal played twice with the roles swapped),
+the policy network beat it:
 
-| 旧 PIMC 档位（假想世界 × 迭代） | 对局数 | 策略网络胜率 |
+| Old PIMC setting (worlds × iterations) | Games | Policy network win rate |
 |---|---|---|
 | 25 × 120 | 48 | 64.6% |
 | 120 × 600 | 24 | 58.3% |
 | 240 × 1600 | 80 | **68.8%** |
 
-基于该结果，搜索链路（`PimcAiPlayer`、`MctsSearcher`、`Determinizer`、`PassInference`、
-`FastRolloutPolicy`、`BombPolicy`、`HandShape`）、基于采样胜率的叫地主评估 `BidEvaluator`
-以及依赖它们的 `SelfPlayRunner`、`MatchRunner` 已整体移除，叫地主改为随机。
-如需取回，历史提交 `f8c9680` 及其之前的版本完整保留了这套实现。
+On the strength of that result the whole search chain (`PimcAiPlayer`, `MctsSearcher`, `Determinizer`,
+`FastRolloutPolicy`, …), the sampling-based `BidEvaluator` and the tools that depended on them
+(`SelfPlayRunner`, `MatchRunner`) were removed, the bid became random, and the web client moved from an
+embedded Java server to `server/`. Everything before commit `f8c9680` still contains that implementation.
