@@ -1,10 +1,14 @@
-# doudizhu_ai Go 实现
+# doudizhu_ai Go implementation
 
-Java 版 [doudizhu_ai/java](../java) 的 Go 移植:斗地主引擎状态机、与训练侧完全一致的动作枚举、
-PerfectDou 输入编码,以及**纯 Go 的策略网络推理**(不用 cgo、不用 libtorch、不用 ONNX runtime)。
-权重与对齐基准和 Java/C++ 共用仓库根目录 [data/](../data),行为逐位对齐。
+*读中文版: [README_CN.md](README_CN.md)*
 
-## 使用
+A Go port of the Java version [doudizhu_ai/java](../java): the Dou Dizhu engine state machine, move
+enumeration exactly identical to the training side, PerfectDou input encoding, and **policy-network inference in
+pure Go** (no cgo, no libtorch, no ONNX runtime).
+The weights and the alignment baseline are shared with Java/C++ through the repository root [data/](../data);
+behaviour is aligned bit for bit.
+
+## Usage
 
 ```bash
 go get github.com/esrrhs/doudizhu_ai/go
@@ -53,31 +57,31 @@ func main() {
 }
 ```
 
-## 公开 API
+## Public API
 
-点数索引 `0..14 = 3 4 5 6 7 8 9 T J Q K A 2 小王 大王`(即 Java `Rank.getValue() - 3`),
-牌集一律用 `[15]int32` 张数向量表示,全零即过牌。
+Rank indices `0..14 = 3 4 5 6 7 8 9 T J Q K A 2 小王 大王` (i.e. Java `Rank.getValue() - 3`; 小王/大王 are the
+small and the big joker), and every card set is represented as a `[15]int32` count vector — all zeros means pass.
 
-| Go | 等价的 Java 调用 |
+| Go | Equivalent Java call |
 | --- | --- |
 | `Legal(hand, toBeat [15]int32) [][15]int32` | `PerfectDouMoves.legal` |
 | `Detect(cs [15]int32) (mtType, rank, length int)` | `PerfectDouMoves.detect` |
 | `ToMove(cs [15]int32, playerID int) (*Move, error)` | `PerfectDouMoves.toMove` |
-| `Key(cs [15]int32) int64` | `PerfectDouMoves.key`(45 位多重集指纹) |
+| `Key(cs [15]int32) int64` | `PerfectDouMoves.key` (45-bit multiset fingerprint) |
 | `MinSteps(cs [15]int32) int` | `Oracle.minSteps` |
 | `Observe(view *PublicView) (*View, error)` | `PerfectDouFeatures.observe` |
-| `Encode(v *View, xImp, seq []float32)` | `PerfectDouFeatures.encode`(1676 / 5400) |
-| `ActionFeature(v *View, m *Move, out []float32, off int)` | `PerfectDouFeatures.actionFeature`(186) |
+| `Encode(v *View, xImp, seq []float32)` | `PerfectDouFeatures.encode` (1676 / 5400) |
+| `ActionFeature(v *View, m *Move, out []float32, off int)` | `PerfectDouFeatures.actionFeature` (186) |
 | `Load() / LoadPolicy(dir) *Policy` | `ActorNetwork.load` |
 | `(*Policy).Score(seat, xImp, seq, feat, options)` | `ActorNetwork.score` |
 | `(*Policy).Decide(view)` | `NeuralAiPlayer.decide` |
 | `NewState / (*State).ApplyMove / (*State).PublicViewOf` | `GameState` |
 | `FindSharedData / ResolveSharedData` | `SharedData` |
 
-维度常量:`NodeSize=1676`、`SeqSize=5400`、`ActionSize=186`、`CardMatrix=180`、`LSTMSteps=10`、
-`LSTMIn=540`;牌型编码为 `MTPass..MTWrong`,与 C++ `MoveType` 一一对应。
+Dimension constants: `NodeSize=1676`, `SeqSize=5400`, `ActionSize=186`, `CardMatrix=180`, `LSTMSteps=10`,
+`LSTMIn=540`; the move-type encoding is `MTPass..MTWrong`, in one-to-one correspondence with the C++ `MoveType`.
 
-## 构建与测试
+## Build and test
 
 ```bash
 cd go
@@ -87,38 +91,42 @@ go build ./...
 go test ./... -v
 ```
 
-CI 在 [.github/workflows/go.yml](../.github/workflows/go.yml) 里按 vet → build → test 执行。
+CI runs vet → build → test in [.github/workflows/go.yml](../.github/workflows/go.yml).
 
-- `parity_test.go`:**跨语言对齐契约**。回放 `../data/golden/golden24.txt.gz`
-  (PerfectDouCPP `tools/pddump.cpp` 导出,24 局 712 个决策),逐决策断言
-  候选动作集合与 C++ 作为 45 位多重集完全相等、`xImp`/`seq`/每个 `actionFeat` **逐位相等**、
-  手写前向的 logits 偏差 < 1e-3 且 argmax 恒等于 golden 的 `CHOSEN` 槽位。
-  当前结果:712 个决策,最大 logit 偏差 4.9e-4,argmax 不一致 0 个。
-- `moves_test.go` / `oracle_test.go` / `features_test.go` / `def_test.go`:与 Java JUnit 用例
-  一一对应的移植,外加与 oracle 无关的暴力最少步数对照。
-- `policy_test.go`:推理入口的冒烟测试与输入校验。
+- `parity_test.go`: the **cross-language alignment contract**. It replays `../data/golden/golden24.txt.gz`
+  (exported by the PerfectDouCPP `tools/pddump.cpp`, 24 games / 712 decisions) and asserts, per decision, that the
+  candidate action set is exactly equal to the C++ record as a 45-bit multiset, that `xImp`/`seq`/every `actionFeat` are
+  **bit-identical**, and that the hand-written forward pass has a logit deviation < 1e-3 while its argmax always equals
+  the golden `CHOSEN` slot.
+  Current result: 712 decisions, max logit deviation 4.9e-4, 0 argmax mismatches.
+- `moves_test.go` / `oracle_test.go` / `features_test.go` / `def_test.go`: ports that map one-to-one onto the Java JUnit
+  cases, plus a brute-force minimum-steps cross-check that is independent of the oracle.
+- `policy_test.go`: smoke tests of the inference entry points plus input validation.
 
-## 权重读取
+## Weight loading
 
-`data/models/ts/actor{0,1,2}_ts.pt` 是 TorchScript 归档,张量以 **STORED(不压缩)** 的 zip 条目
-`<root>/data/<i>` 存放,是小端 float32 行主序裸字节;`actor{N}_manifest.json`
-(由 [tools/export_actor.py](../tools/export_actor.py) 生成)记录了 条目序号 → 层名 → 形状。
-Go 侧只用标准库 `archive/zip` + `encoding/json` 读取,并按形状校验字节数,不硬编码形状。
+`data/models/ts/actor{0,1,2}_ts.pt` are TorchScript archives; tensors are stored as **STORED (uncompressed)** zip
+entries `<root>/data/<i>`, which are raw little-endian float32 row-major bytes; `actor{N}_manifest.json`
+(generated by [tools/export_actor.py](../tools/export_actor.py)) records entry index → layer name → shape.
+The Go side reads them using only the standard-library `archive/zip` + `encoding/json` and validates the byte count
+against the shape, so no shape is hardcoded.
 
-前向:`node = concat(xImp[1676], LSTM 末步隐状态[128])`,每个候选
-`joint = concat(node, actionFeat[186])` → `relu(l1)` → `relu(l2)` → `relu(l3)` → `relu(l4)` → `head`。
-LSTM 取门顺序 **i, f, g, o**(即 PyTorch `weight_ih_l0` 的实际拼接顺序)。
+Forward pass: `node = concat(xImp[1676], LSTM last-step hidden state[128])`, then per candidate
+`joint = concat(node, actionFeat[186])` → `relu(l1)` → `relu(l2)` → `relu(l3)` → `relu(l4)` → `head`.
+The LSTM takes the gate order **i, f, g, o** (the actual concatenation order of PyTorch `weight_ih_l0`).
 
-> 坑:`gateOrder` 一度被写成 cuDNN 习惯的 `"i, h, f, c"`,那会让 logits 偏到 1~1900、约 89 处
-> argmax 出错。清单已改为 `i, f, g, o`,加载时会校验该字段,不符合直接报错而不是静默跑偏。
+> Trap: `gateOrder` was once written as the cuDNN-convention `"i, h, f, c"`, which pushed logits off by 1~1900 and broke
+> about 89 argmaxes. The manifest has been changed to `i, f, g, o`, the field is validated on load, and a mismatch
+> errors out instead of silently drifting.
 
-## 与 Java 的差异
+## Differences from Java
 
-- 推理是手写 float32 前向(Java 走 DJL/libtorch),因此 logits 偏差约为 5e-4 而不是 2.4e-4;
-  仍远小于 1e-3 的门限,argmax 完全一致。`l1` 拆成"状态部分先算一次 + 每个候选只算 186 那一截",
-  与 TorchScript 的 `concat` 数学一致,只差浮点求和顺序。
-- `Move` 用 `[15]int32` 张数向量存牌(Java 用 `List<Rank>`),信息等价。
-- `Oracle` 的备忘录在 Java 里是 `ThreadLocal`,Go 侧改为进程内共享缓存 + 互斥锁
-  (纯函数,缓存只影响速度不影响结果)。
-- 未移植 `GameState.copy()` 深拷贝与 `rules/MoveGenerator`(引擎侧简化枚举的生成器):
-  策略网络必须吃完整枚举的动作空间,Go 侧统一用 `Legal`。
+- Inference is a hand-written float32 forward pass (Java goes through DJL/libtorch), so the logit deviation is about
+  5e-4 rather than Java's 2.747e-4; still far below the 1e-3 threshold, and the argmax matches exactly. `l1` is split into
+  "compute the state part once + only the 186 slice per candidate", which is mathematically the same as TorchScript's
+  `concat` and differs only in floating-point summation order.
+- `Move` stores cards as a `[15]int32` count vector (Java uses `List<Rank>`); the information is equivalent.
+- The `Oracle` memo table is a `ThreadLocal` in Java; the Go side uses a process-wide shared cache plus a mutex
+  (a pure function — the cache affects speed only, never the result).
+- `GameState.copy()` deep copy and `rules/MoveGenerator` (the engine-side generator with simplified enumeration) were
+  not ported: the policy network must be fed the fully enumerated action space, so the Go side always uses `Legal`.

@@ -122,10 +122,35 @@ cd go && go test ./...      # 21 tests, zero third-party dependencies
 ```
 
 ```go
-import ddz "github.com/esrrhs/doudizhu_ai/go"
+package main
 
-policy, err := ddz.Load()                        // weights directory is located from the repo layout
-move, logits, err := policy.Decide(view)         // enumerate all candidates, take the highest score
+import (
+	"fmt"
+
+	ddz "github.com/esrrhs/doudizhu_ai/go"
+)
+
+func main() {
+	policy, err := ddz.Load() // weights live in data/models/ts
+	if err != nil {
+		panic(err)
+	}
+	hands := make([][15]int32, 3)
+	for i, cards := range []string{"334445566689TTTJKAAR", "4577899JQQKKAA222", "335677889TJJQQK2B"} {
+		hands[i], _ = ddz.ParseCards(cards)
+	}
+	bottom, _ := ddz.ParseCards("4TK")
+	// the landlord's 20 cards already contain the 3 bottom cards
+	state, err := ddz.NewState(hands, 0, bottom)
+	if err != nil {
+		panic(err)
+	}
+	move, logits, err := policy.Decide(state.PublicViewOf(state.ActivePlayerID()))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(move, len(logits))
+}
 ```
 
 ### C++
@@ -138,12 +163,34 @@ ctest --test-dir build --output-on-failure
 ```
 
 ```cpp
+#include <array>
+#include <cstdio>
+
 #include "doudizhu/api.h"
 
-doudizhu::Policy policy;
-policy.Load(doudizhu::Policy::DefaultModelDir());
-auto d = policy.Decide(state.GetPublicView(active));
+int main()
+{
+    doudizhu::Policy policy;
+    if (!policy.Load(doudizhu::Policy::DefaultModelDir()))
+    {
+        std::fprintf(stderr, "%s\n", policy.Error().c_str());
+        return 1;
+    }
+    const std::array<doudizhu::CardSet, 3> hands{
+        doudizhu::ParseCards("334445566689TTTJKAAR"),
+        doudizhu::ParseCards("4577899JQQKKAA222"),
+        doudizhu::ParseCards("335677889TJJQQK2B")};
+    const doudizhu::CardSet bottom = doudizhu::ParseCards("4TK");
+    doudizhu::GameState state(hands, 0, bottom);
+    const auto d = policy.Decide(state.GetPublicView(state.ActivePlayerIndex()));
+    std::printf("%s (%d candidates)\n", doudizhu::DebugCards(d.move.cards).c_str(),
+                static_cast<int>(d.options.size()));
+    return 0;
+}
 ```
+
+Both programs above are compiled and run before being written here: on that position they answer
+**`334455` out of 68 candidates**, which is also what the Java engine picks for the same deal.
 
 ---
 

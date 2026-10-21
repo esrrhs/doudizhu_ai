@@ -1,129 +1,149 @@
-# 斗地主网页对战平台 (FakeLua 服务)
+# Dou Dizhu web battle platform (FakeLua service)
 
-三套算法（`java/` `go/` `cpp/`）之外的第四件事：把引擎包成一个能玩的服务。
-**牌局规则与神经网络推理都在 C++ 里，Lua 只做 HTTP、会话与流程编排。**
+*读中文版: [README_CN.md](README_CN.md)*
 
-- 引擎：`cpp/` 的静态库 `doudizhu`（与 Java/Go 逐位对齐的那一份，无第三方依赖）
-- 宿主：`host/main.cpp`，把引擎注册成 `doudizhu.*` 原生函数，跑 fakelua 的 `init/update/fini`
-- 业务：`lua/`（`main.lua` 生命周期、`http_server.lua` 路由、`game.lua` 会话流程、`def.lua` 编码转换）
-- 前端：`static/`（与旧 Java 版逐字相同 —— HTTP 契约没变，所以一行没改）
-- 契约：[API.md](API.md)；用例：[tests/api_test.py](tests/api_test.py)
+The fourth thing besides the three algorithms (`java/` `go/` `cpp/`): wrap the engine into a service
+you can actually play. **The card rules and the neural-network inference both live in C++; Lua only
+does HTTP, sessions and flow orchestration.**
 
-## 为什么不是直接用 `flua`
+- Engine: the `cpp/` static library `doudizhu` (the build that is bit-aligned with Java/Go, no third-party dependencies)
+- Host: `host/main.cpp`, registers the engine as `doudizhu.*` native functions and runs fakelua's `init/update/fini`
+- Business logic: `lua/` (`main.lua` lifecycle, `http_server.lua` routing, `game.lua` session flow, `def.lua` encoding conversion)
+- Frontend: `static/` (character-for-character identical to the old Java version — the HTTP contract did not change, so not one line was edited)
+- Contract: [API.md](API.md); test cases: [tests/api_test.py](tests/api_test.py)
 
-`majiang_algorithm` 的服务没有宿主：那套算法整体被移植成了 Lua。斗地主不行 ——
-一次决策要给上百个候选动作各跑一遍 1990 维 × 5 层的前向，纯 Lua 慢一个数量级，
-而且 `cpp/` 已经有一份和 Java/Go 逐位对齐的实现，再抄一遍 Lua 版本只会多一个会走偏的真相源。
-所以这里是一层薄宿主：规则与推理留在 C++，Lua 拿到的每个数都出自同一份引擎。
+## Why not just use `flua`
 
-## 构建
+The `majiang_algorithm` service has no host: that whole algorithm was ported into Lua. Dou Dizhu
+cannot do that — a single decision runs a 1990-dimensional × 5-layer forward once per candidate, and
+there are hundreds of candidates; pure Lua is an order of magnitude slower, and `cpp/` already has an
+implementation bit-aligned with Java/Go, so copying it into Lua again would only add another source
+of truth that can drift. This is therefore a thin host: rules and inference stay in C++, and every
+number Lua receives comes from that same engine.
 
-需要 [fakelua](https://github.com/esrrhs/fakelua)（提供 `libfakelua` 与头文件）。
+## Build
+
+Requires [fakelua](https://github.com/esrrhs/fakelua) (provides `libfakelua` and the headers).
 
 ```bash
-# 1) 装 fakelua (源码里编, 依赖由 CPM 拉)
+# 1) install fakelua (built from source, its dependencies are fetched by CPM)
 git clone https://github.com/esrrhs/fakelua && cd fakelua
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
       -DFAKELUA_BUILD_TESTS=OFF -DFAKELUA_BUILD_BENCHMARKS=OFF
 cmake --build build --target flua -j
-sudo cmake --install build --prefix /usr/local       # 或 ~/.local、/opt/homebrew
+sudo cmake --install build --prefix /usr/local       # or ~/.local, /opt/homebrew
 
-# 2) 装宿主 (默认在 /opt/homebrew 找 fakelua, 找不到就用 -DFAKELUA_PREFIX 指过去)
+# 2) build the host (looks for fakelua under /opt/homebrew by default; if it is not there, point -DFAKELUA_PREFIX at it)
 cd ../doudizhu_ai/server
 cmake -S host -B host/build -DCMAKE_BUILD_TYPE=Release -DFAKELUA_PREFIX=/usr/local
 cmake --build host/build -j
 ```
 
-宿主自己只读三个开关（`--once` / `--jit_type=n` / `--model_dir=...`），不依赖 gflags；
-权重走 `cpp/` 的 `Policy::DefaultModelDir()`，即在当前目录往上找 `data/models/ts`，
-所以**要在 `server/` 目录下启动**。
+The host itself reads only three switches (`--once` / `--jit_type=n` / `--model_dir=...`) and does not
+depend on gflags; the weights are located through `cpp/`'s `Policy::DefaultModelDir()`, which searches
+upwards from the current directory for `data/models/ts`, so **start it from the `server/` directory**.
 
-## 运行
+## Running
 
 ```bash
 cd server
 DOUDIZHU_PORT=8080 ./host/build/doudizhu_server lua
-# 浏览器打开 http://127.0.0.1:8080
+# open http://127.0.0.1:8080 in a browser
 ```
 
-自检（不建 HTTP 服务，跑完 init 就退出，非 0 即失败）：
+Self-check (starts no HTTP server, exits as soon as init is done, non-zero exit code means failure):
 
 ```bash
 DOUDIZHU_SMOKE=1 ./host/build/doudizhu_server lua --once
 ```
 
-自检覆盖：权重已加载、发牌 17/17/17 与底牌盖着、定地主后 20 张并先手、三家全用策略网络
-跑到终局、牌局对象能显式释放、会话 DTO 的形状、提示非空、AI 一步与思路数据、
-JSON 字符串键编码成对象、两套牌面写法往返一致。
+What the self-check covers: the weights are loaded, the deal is 17/17/17 with the bottom cards face
+down, after the landlord is set that hand has 20 cards and leads, all three seats play to the end of
+the game through the policy network, a game object can be released explicitly, the shape of the
+session DTO, a non-empty hint, the AI one-step move plus its reasoning data, JSON string keys encoded
+as objects, and both card notations round-tripping identically.
 
-接口回归：
+API regression:
 
 ```bash
-python3 tests/api_test.py                                  # 自己拉起服务 (随机端口)
-python3 tests/api_test.py --base-url http://127.0.0.1:8080 # 打已运行的服务
+python3 tests/api_test.py                                  # starts its own server on a random port
+python3 tests/api_test.py --base-url http://127.0.0.1:8080 # hits an already running server
 ```
 
-## 玩法
+## Gameplay
 
-真人坐 0 号位。叫地主阶段每家（含两个 AI）**各以 1/3 概率随机表态**，三家都不叫就流局重发、
-先叫位顺延；地主确定后翻开 3 张底牌并入地主手牌，先手归地主。出牌阶段两个 AI 由
-PerfectDou 式策略网络直接取最高分着法，真人可以点【AI 提示】要一手建议。
+A human sits in seat 0. During the bidding phase every seat (both AIs included) **declares at random,
+each with probability 1/3**; if all three decline, the deal is void, the cards are reshuffled and the
+first-caller position rotates. Once the landlord is settled, the 3 bottom cards are revealed and merged
+into the landlord's hand, and the landlord leads. In the playing phase the two AIs take the
+highest-scoring move directly from the PerfectDou-style policy network; the human can click 【AI 提示】
+(AI hint) to ask for a suggested move.
 
-网页端的「阵营胜率」是 softmax 后的**策略概率**，不是搜索胜率。
+The 「阵营胜率」 (camp win rate) shown on the web page is the **softmax policy probability**, not a
+search win rate.
 
-## 资源占用
+## Resource usage
 
-macOS arm64、Release 构建、loopback：
+macOS arm64, Release build, loopback:
 
-| 指标 | 数值 |
+| Metric | Value |
 |---|---|
-| 常驻内存 RSS | 约 35 MB（含三份权重，单会话） |
-| 请求延迟 p50 | 约 4 ms（三拍一个请求，节拍占大头） |
-| 单次决策耗时 | p50 2 ms，p90 5 ms，最大 9 ms |
-| 并发模型 | 单线程事件循环，最多吃满 1 核 |
-| 空闲 CPU | 约 0.1%（无请求时节拍退避到 20 ms） |
+| Resident memory RSS | about 35 MB (three weight sets included, single session) |
+| Request latency p50 | about 4 ms (one request spans three ticks, the tick pace is the bulk of it) |
+| Per-decision time | p50 2 ms, p90 5 ms, max 9 ms |
+| Concurrency model | single-threaded event loop, at most 1 core saturated |
+| Idle CPU | about 0.1% (with no requests the tick backs off to 20 ms) |
 
-fakelua 没有 GC，但帧 arena 在每次顶层 Call 入口重置，请求级临时表与字符串随调用结束回收。
-会**长期驻留**的只有两处：`container.map` 里序列化后的会话表，以及宿主 registry 里的牌局对象 ——
-后者必须显式 `doudizhu.free`，所以重开一局会先释放上一局，闲置一小时以上的会话由 `Sweep` 回收。
+fakelua has no GC, but the frame arena is reset at the entry of every top-level Call, so the
+per-request temporary tables and strings are reclaimed when the call returns. Only two things
+**stay resident long term**: the serialized session tables in `container.map`, and the game objects in
+the host registry — the latter must be released explicitly with `doudizhu.free`, so restarting a game
+frees the previous one first, and sessions idle for over an hour are reclaimed by `Sweep`.
 
-## 线上部署
+## Production deployment
 
-<https://doudizhu.esrrhs.xyz> —— nginx 反代到 `127.0.0.1:8889`，进程由 systemd 管
-（`doudizhu.service`，`User=ubuntu`、`WorkingDirectory=<repo>/server`、`Environment=DOUDIZHU_PORT=8889`、
-`Restart=always`），与 `majiang.service` / `fakefish.service` 同一套模式。
-代码在 `ubuntu@gq.esrrhs.xyz:/home/ubuntu/project/doudizhu_ai`。
+<https://doudizhu.esrrhs.xyz> —— nginx already reverse-proxies that domain to `127.0.0.1:8889`, the
+process is managed by systemd (`doudizhu.service`, with `User=ubuntu`,
+`WorkingDirectory=<repo>/server`, `Environment=DOUDIZHU_PORT=8889`, `Restart=always`), the same pattern
+as `majiang.service` / `fakefish.service`.
+The code lives at `ubuntu@gq.esrrhs.xyz:/home/ubuntu/project/doudizhu_ai`.
 
-**那台机器访问不到 GitHub**，所以发布走 rsync 而不是 `git pull`：
+**That machine cannot reach GitHub**, so publishing goes through rsync instead of `git pull`:
 
 ```bash
-# 本地执行: 同步代码 (不含 .git 与各类构建目录)
+# run locally: sync the code (excluding .git and all build directories)
 cd .. && rsync -az --delete --exclude='.git/' --exclude='**/target/' \
     --exclude='server/host/build/' --exclude='cpp/build/' --exclude='go/bin/' \
     doudizhu_ai/ ubuntu@gq.esrrhs.xyz:/home/ubuntu/project/doudizhu_ai/
 
-# 远端执行: 重新编译 + 自检 + 重启
+# run remotely: rebuild + self-check + restart
 ssh ubuntu@gq.esrrhs.xyz 'cd /home/ubuntu/project/doudizhu_ai/server && \
     cmake -S host -B host/build -DCMAKE_BUILD_TYPE=Release -DFAKELUA_PREFIX=/usr/local && \
     cmake --build host/build -j2 && \
     DOUDIZHU_SMOKE=1 ./host/build/doudizhu_server lua --once && \
     sudo systemctl restart doudizhu'
 
-# 打线上跑一遍接口契约 (12 个用例)
+# run the API contract against production (12 cases)
 python3 server/tests/api_test.py --base-url https://doudizhu.esrrhs.xyz
 ```
 
-宿主机上已装 `/usr/local` 版 fakelua（`flua` + `libfakelua` + `fakeluaConfig.cmake`，
-`majiang`/`fakefish` 用的就是它），所以只需要编本仓库的宿主，不用重编 boost；
-换机器时要先装 fakelua，见上面的「构建」。
+The deploy box already has the `/usr/local` fakelua installed (`flua` + `libfakelua` +
+`fakeluaConfig.cmake`, the same copy `majiang`/`fakefish` use), so only this repository's host needs
+building and boost never gets rebuilt; on a different machine install fakelua first, see **Build**
+above.
 
-gq 是 2 核 2G 的共享机器，实测这个服务 RSS 约 34 MB、空闲 CPU 0.4%，重启到重新监听约 5 s
-（4 个 Lua 文件的 JIT 编译）。它与 majiang(:8888)、fakefish(:8080) 并存，端口别撞。
+gq is a shared 2-core 2G machine: measured on it this service sits at about 34 MB RSS with 0.4% idle
+CPU, and the time from restart until the socket listens again is about 5 s (the JIT compilation of the
+4 Lua files). It
+coexists with majiang (:8888) and fakefish (:8080), so keep the ports from colliding.
 
-## 已知边界
+## Known limits
 
-- 单线程事件循环，一次请求要跨三拍（收 → 派发 → 回包），尾延迟由节拍决定而不是算法决定。
-- `lua/` 不用协程、元表与 `require`（fakelua 不支持）；文件级 `local` 是常量，可变状态一律走
-  `container.map`，表要先 `serialize.encode` 成字符串才能存进去。
-- 牌局规则只有 C++ 一份，`java/` 与 `go/` 不参与服务端：三语一致性由 `data/golden/` 的
-  基准记录在各自测试里保证。
+- Single-threaded event loop: one request spans three ticks (receive → dispatch → respond), so the
+  tail latency is decided by the tick pace rather than by the algorithm.
+- `lua/` uses no coroutines, no metatables and no `require` (fakelua does not support them); file-level
+  `local` values are constants, so mutable state always goes through `container.map`, and a table must
+  first be turned into a string with `serialize.encode` before it can be stored there.
+- The card rules exist only in the one C++ copy; `java/` and `go/` take no part in the server: the
+  three-language consistency is guaranteed by the baseline records in `data/golden/` inside each
+  implementation's own tests.
