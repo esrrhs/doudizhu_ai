@@ -5,6 +5,7 @@ import com.doudizhu.model.Move;
 import com.doudizhu.nn.ActorNetwork;
 import com.doudizhu.nn.PerfectDouFeatures;
 import com.doudizhu.nn.PerfectDouMoves;
+import com.doudizhu.nn.SharedData;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -22,8 +23,13 @@ import java.util.List;
  */
 public class NeuralAiPlayer implements AiPlayer {
 
-    /** 仓库内自带的权重目录 */
-    public static final Path DEFAULT_MODEL_DIR = Path.of("models/ts");
+    /** 仓库内自带权重目录相对仓库根的位置 */
+    public static final String DEFAULT_MODEL_REL = "data/models/ts";
+
+    /** 按当前工作目录解析出 {@code data/models/ts} 的真实位置 */
+    public static Path defaultModelDir() {
+        return SharedData.resolve(DEFAULT_MODEL_REL);
+    }
 
     private final ActorNetwork network;
 
@@ -31,9 +37,9 @@ public class NeuralAiPlayer implements AiPlayer {
         this.network = network;
     }
 
-    /** 加载仓库默认目录 {@code models/ts} 下的权重 */
+    /** 加载仓库默认目录 {@code data/models/ts} 下的权重 */
     public static NeuralAiPlayer create() throws IOException {
-        return fromDirectory(DEFAULT_MODEL_DIR);
+        return fromDirectory(defaultModelDir());
     }
 
     /** 从权重目录 (含 actor0_ts.pt .. actor2_ts.pt) 创建；可多座位共享同一实例 */

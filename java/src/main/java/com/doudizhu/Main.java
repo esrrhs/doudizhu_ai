@@ -32,7 +32,7 @@ public class Main {
     public static void main(String[] args) throws Exception {
         boolean runCli = false;
         int port = 8080;
-        Path modelDir = NeuralAiPlayer.DEFAULT_MODEL_DIR;
+        Path modelDir = NeuralAiPlayer.defaultModelDir();
 
         for (String arg : args) {
             if ("--cli".equalsIgnoreCase(arg)) {
