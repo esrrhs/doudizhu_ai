@@ -1,5 +1,8 @@
 package com.doudizhu;
 
+import com.doudizhu.ai.AiPlayer;
+import com.doudizhu.ai.MatchRunner;
+import com.doudizhu.ai.NeuralAiPlayer;
 import com.doudizhu.ai.PimcAiPlayer;
 import com.doudizhu.ai.SelfPlayRunner;
 import com.doudizhu.game.GameState;
@@ -7,9 +10,11 @@ import com.doudizhu.game.PublicView;
 import com.doudizhu.model.Hand;
 import com.doudizhu.model.Move;
 import com.doudizhu.model.Rank;
+import com.doudizhu.nn.ActorNetwork;
 import com.doudizhu.rules.Deck;
 import com.doudizhu.web.GameHttpServer;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -19,43 +24,62 @@ import java.util.Random;
  * 斗地主现代 AI 运行入口
  * 默认启动本地 Web 网页对战客户端 (http://localhost:8080)
  * 也可通过参数 --cli 运行纯命令行测试演示
+ *
+ * <p>参数: --cli / --selfplay / --match / --port= / --nn / --model-dir=models/ts /
+ * --games= / --worlds= / --iters= / --seed= / --minutes= / --out=
  */
 public class Main {
 
     public static void main(String[] args) throws Exception {
         boolean runCli = false;
         boolean runSelfPlay = false;
+        boolean runMatch = false;
+        boolean useNeural = false;
         int port = 8080;
-        java.util.List<String> selfPlayArgs = new java.util.ArrayList<>();
+        Path modelDir = Path.of("models/ts");
+        java.util.List<String> forwarded = new java.util.ArrayList<>();
 
         for (String arg : args) {
             if ("--cli".equalsIgnoreCase(arg)) {
                 runCli = true;
             } else if ("--selfplay".equalsIgnoreCase(arg)) {
                 runSelfPlay = true;
+            } else if ("--match".equalsIgnoreCase(arg)) {
+                runMatch = true;
+            } else if ("--nn".equalsIgnoreCase(arg)) {
+                useNeural = true;
             } else if (arg.startsWith("--port=")) {
                 port = Integer.parseInt(arg.substring("--port=".length()));
+            } else if (arg.startsWith("--model-dir=")) {
+                modelDir = Path.of(arg.substring("--model-dir=".length()));
+                useNeural = true;
+                forwarded.add(arg);
             } else if (arg.startsWith("--games=") || arg.startsWith("--worlds=")
                     || arg.startsWith("--iters=") || arg.startsWith("--seed=")
-                    || arg.startsWith("--out=")) {
-                selfPlayArgs.add(arg);
+                    || arg.startsWith("--minutes=") || arg.startsWith("--out=")) {
+                forwarded.add(arg);
             }
         }
 
-        if (runCli) {
-            runCliSimulation();
+        if (runMatch) {
+            MatchRunner.main(forwarded.toArray(new String[0]));
+        } else if (runCli) {
+            runCliSimulation(useNeural ? modelDir : null);
         } else if (runSelfPlay) {
-            SelfPlayRunner.main(selfPlayArgs.toArray(new String[0]));
+            SelfPlayRunner.main(forwarded.toArray(new String[0]));
         } else {
-            startWebServer(port);
+            startWebServer(port, useNeural ? modelDir : null);
         }
     }
 
-    private static void startWebServer(int port) {
-        try {
-            GameHttpServer server = new GameHttpServer(port);
+    private static void startWebServer(int port, Path modelDir) throws Exception {
+        try (ActorNetwork network = modelDir == null ? null : ActorNetwork.load(modelDir)) {
+            GameHttpServer server = new GameHttpServer(port, network);
             server.start();
 
+            System.out.println(modelDir == null
+                    ? "👉 AI 引擎: PIMC 采样搜索。"
+                    : "👉 AI 引擎: 强化学习策略网络 " + modelDir + "。");
             System.out.println("👉 服务已就绪。如需在命令行查看纯 AI 对局，可使用参数: mvn exec:java -Dexec.args=\"--cli\"");
             System.out.println("按 Ctrl+C 可停止网页端服务。");
 
@@ -67,10 +91,11 @@ public class Main {
         }
     }
 
-    private static void runCliSimulation() {
+    private static void runCliSimulation(Path modelDir) throws Exception {
         System.out.println("===============================================================");
-        System.out.println("   斗地主 AI 引擎 - PIMC (Perfect Information Monte Carlo)");
-        System.out.println("   采用 Java 17 + PIMC 确定化采样 + 2v1 合作对抗 MCTS 搜索");
+        System.out.println(modelDir == null
+                ? "   斗地主 AI 引擎 - PIMC (Perfect Information Monte Carlo)\n   采用 Java 17 + PIMC 确定化采样 + 2v1 合作对抗 MCTS 搜索"
+                : "   斗地主 AI 引擎 - 强化学习策略网络 (PerfectDou)\n   权重: " + modelDir);
         System.out.println("===============================================================\n");
 
         Random random = new Random();
@@ -118,11 +143,17 @@ public class Main {
         System.out.printf("  地主 P%d 获得底牌后手牌 (20张): %s\n\n", landlordId, hands.get(landlordId).toCardString());
 
         System.out.println("[阶段 3] 正式对局出牌阶段");
-        PimcAiPlayer[] aiPlayers = new PimcAiPlayer[]{
-                new PimcAiPlayer(25, 120),
-                new PimcAiPlayer(25, 120),
-                new PimcAiPlayer(25, 120)
-        };
+        AiPlayer[] aiPlayers;
+        if (modelDir == null) {
+            aiPlayers = new AiPlayer[]{
+                    new PimcAiPlayer(25, 120),
+                    new PimcAiPlayer(25, 120),
+                    new PimcAiPlayer(25, 120)
+            };
+        } else {
+            AiPlayer neural = new NeuralAiPlayer(ActorNetwork.load(modelDir));
+            aiPlayers = new AiPlayer[]{neural, neural, neural};
+        }
 
         GameState state = new GameState(hands, landlordId, bottomCards);
         int round = 1;

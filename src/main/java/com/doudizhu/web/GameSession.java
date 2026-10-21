@@ -1,9 +1,12 @@
 package com.doudizhu.web;
 
+import com.doudizhu.ai.AiPlayer;
 import com.doudizhu.ai.BidEvaluator;
+import com.doudizhu.ai.NeuralAiPlayer;
 import com.doudizhu.ai.PimcAiPlayer;
 import com.doudizhu.game.GameState;
 import com.doudizhu.game.PublicView;
+import com.doudizhu.nn.ActorNetwork;
 import com.doudizhu.model.CardType;
 import com.doudizhu.model.Hand;
 import com.doudizhu.model.Move;
@@ -44,16 +47,29 @@ public class GameSession {
     private int landlordId = -1;
 
     private GameState gameState;
-    private final PimcAiPlayer aiPlayer1;
-    private final PimcAiPlayer aiPlayer2;
+    private final AiPlayer aiPlayer1;
+    private final AiPlayer aiPlayer2;
     private final Map<Integer, PimcAiPlayer.DecisionResult> lastAiThoughts = new HashMap<>();
     private final List<String> eventLogs = new ArrayList<>();
     private final Move[] playerLastActions = new Move[3];
     private final Random random = new Random();
 
     public GameSession() {
-        this.aiPlayer1 = new PimcAiPlayer(240, 1600, random);
-        this.aiPlayer2 = new PimcAiPlayer(240, 1600, random);
+        this(null);
+    }
+
+    /**
+     * @param neural 非空时两个 AI 座位都改用强化学习策略网络, 否则用 PIMC 搜索
+     */
+    public GameSession(ActorNetwork neural) {
+        if (neural == null) {
+            this.aiPlayer1 = new PimcAiPlayer(240, 1600, random);
+            this.aiPlayer2 = new PimcAiPlayer(240, 1600, random);
+        } else {
+            // 权重只加载一次, 三个座位共用同一实例
+            this.aiPlayer1 = new NeuralAiPlayer(neural);
+            this.aiPlayer2 = this.aiPlayer1;
+        }
         // 默认进入互动式叫地主流程 (随机首叫玩家)
         startBiddingGame(-1);
     }
@@ -361,7 +377,7 @@ public class GameSession {
         }
 
         PublicView view = gameState.getPublicView(activeId);
-        PimcAiPlayer ai = (activeId == 1) ? aiPlayer1 : aiPlayer2;
+        AiPlayer ai = (activeId == 1) ? aiPlayer1 : aiPlayer2;
 
         PimcAiPlayer.DecisionResult result = ai.decide(view);
         Move chosen = result.getSelectedMove();

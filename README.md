@@ -24,9 +24,39 @@
 ```
 
 ### Gradle
+
 ```groovy
 implementation 'com.github.esrrhs:doudizhu_ai:1.1.0'
 ```
+
+### 使用神经网络玩家时的额外依赖
+`ai.djl:api`、`ai.djl.pytorch:pytorch-engine` 与 libtorch 原生库在 pom 中都标记为 `optional`，**不会传递给下游**。
+只使用 PIMC 搜索引擎时无需任何原生库；要用 `NeuralAiPlayer` 需自行补上引擎与本机平台的原生库：
+
+```xml
+<dependency>
+    <groupId>ai.djl.pytorch</groupId>
+    <artifactId>pytorch-engine</artifactId>
+    <version>0.39.0</version>
+</dependency>
+<!-- 显式绑定平台原生库，否则 DJL 会在首次使用时自动下载到 ~/.djl.ai -->
+<dependency>
+    <groupId>ai.djl.pytorch</groupId>
+    <artifactId>pytorch-native-cpu</artifactId>
+    <classifier>osx-aarch64</classifier>
+    <version>2.7.1</version>
+    <scope>runtime</scope>
+</dependency>
+<dependency>
+    <groupId>ai.djl.pytorch</groupId>
+    <artifactId>pytorch-jni</artifactId>
+    <version>2.7.1-0.39.0</version>
+    <scope>runtime</scope>
+</dependency>
+```
+
+权重必须与加载它的 libtorch 版本同主版本导出（本工程固定 2.7.1），详见下文“权重的来源与再导出”。
+网页端与 CLI 中神经网络候选动作显示的“阵营胜率”，是 softmax 归一化后的**策略概率**，不是搜索胜率。
 
 ---
 
@@ -71,6 +101,13 @@ implementation 'com.github.esrrhs:doudizhu_ai:1.1.0'
   - **非紧急勿炸**：严格限制非关键时刻交出炸弹与王炸。
 - **三人自对弈审局工具 (SelfPlayRunner)**：内置全自动对战推演与违规启发审查工具，保障策略迭代的高质量。
 
+### 6. 强化学习策略网络玩家 (可选原生推理)
+- **权重来源**：由 [PerfectDouCPP](https://github.com/esrrhs/PerfectDouCPP) 用 PerfectDou 式自对弈强化学习训练，仓库内 `models/` 直接附带；
+- **决策方式**：对完整动作空间（含飞机带翅的全部具体带牌组合）逐手打分，直接取最高分出牌，单次推理毫秒级；
+- **观察特征**：仅使用公开信息（我的手牌、两家合计未知牌、各家已出与最近一手、底牌剩余、30 手历史、剩余手数等），绝不读取对手私有手牌；
+- **原生推理**：通过 DJL + libtorch 加载 TorchScript 权重，依赖声明为 `optional`，不使用该玩家时核心引擎依旧零原生依赖；
+- **移植校验**：内置与 C++ 训练侧的逐位对齐测试（候选动作集合、全部输入特征、logits 与 argmax 一致）。
+
 ---
 
 ## 🚀 快速开始
@@ -94,11 +131,48 @@ mvn exec:java
 ```bash
 mvn exec:java -Dexec.args="--cli"
 ```
+改用强化学习策略网络出牌（权重在 `models/ts`）：
+```bash
+mvn exec:java -Dexec.args="--cli --nn"
+```
 
-### 3. 运行自动化单元测试
+### 3. 神经网络玩家与 PIMC 的强度对抗评估
+同一副牌跑两局、双方角色互换（NN 坐地主 / NN 坐农民），统计胜率与 ADP 得分：
+```bash
+mvn exec:java -Dexec.args="--match --games=40 --worlds=240 --iters=1600"
+```
+实测结果（NN 始终对抗同配置的 PIMC，胜率含双方角色互换的两组对局）：
+
+| PIMC 档位 (假想世界 × 迭代) | 对局数 | NN 胜率 | NN 坐地主 | NN 坐农民 |
+|---|---|---|---|---|
+| 25 × 120 | 48 | 64.6% | 70.8% | 58.3% |
+| 120 × 600 | 24 | 58.3% | 58.3% | 58.3% |
+| 240 × 1600 (网页端默认) | 80 | **68.8%** | 82.5% | 55.0% |
+
+让网页端 AI 也用策略网络：
+```bash
+mvn exec:java -Dexec.args="--nn"
+```
+
+### 4. 运行自动化单元测试
 ```bash
 mvn clean test
 ```
+
+### 5. 权重的来源与再导出
+仓库内的 `models/latest` 是训练机直接产出的原始权重，`models/ts` 是 Java 侧可直接调用的 TorchScript 版本。
+原始权重由 libtorch 的 `OutputArchive` 保存，**只有参数、没有 forward**，任何 TorchScript 运行时都无法直接调用，
+因此需要经过一次重建导出：
+
+```bash
+# 1) 用与训练侧相同的 PyTorch 版本抽出参数
+python3 tools/export_actor.py extract --in models/latest --out /tmp/params
+# 2) 用与 DJL 原生库相同的版本 (本工程为 2.7.1) 重建并脚本化
+python3 tools/export_actor.py script --in /tmp/params --out models/ts
+```
+
+导出脚本与逐决策基准数据的生成脚本都在 [PerfectDouCPP](https://github.com/esrrhs/PerfectDouCPP) 的 `tools/` 下
+(`export_actor.py` 与 `pddump.cpp`)。
 
 ---
 
@@ -107,17 +181,23 @@ mvn clean test
 ```text
 doudizhu_ai/
 ├── pom.xml                                   # Maven 配置 (Java 17, Central Publishing, GPG Signing)
+├── models/
+│   ├── latest/                               # 训练机直接导出的 actor0..2.pt (TorchScript 参数档)
+│   └── ts/                                   # 带 forward 的可推理权重 (供 DJL 加载)
 ├── src/
 │   ├── main/
 │   │   ├── java/com/doudizhu/
 │   │   │   ├── model/                        # 领域模型 (Rank, Role, CardType, Move, Hand)
 │   │   │   ├── rules/                        # 规则与牌库 (Deck, MoveGenerator)
 │   │   │   ├── game/                         # 牌局状态机与信息视角 (GameState, Player, PublicView)
-│   │   │   ├── ai/                           # PIMC 与 2v1 MCTS 核心 (Determinizer, MctsSearcher, PimcAiPlayer)
+│   │   │   ├── ai/                           # AiPlayer 接口 + PIMC/MCTS + 神经网络玩家 + 评估工具
+│   │   │   ├── nn/                           # 特征编码、完整动作枚举、手数 oracle、DJL 推理封装
 │   │   │   ├── web/                          # Web 会话与 HTTP 服务 (GameSession, GameHttpServer)
 │   │   │   └── Main.java                     # 统一启动入口
 │   │   └── resources/
 │   │       ├── logback.xml                   # 日志配置
 │   │       └── static/                       # Web 前端资源 (index.html, style.css, app.js)
-│   └── test/                                 # 单元测试 (MoveGeneratorTest, PimcAITest)
+│   └── test/
+│       ├── java/com/doudizhu/nn/             # 与 C++ 训练侧的逐位对齐测试
+│       └── resources/golden/                 # PerfectDouCPP 导出的基准决策记录 (24 局 712 决策)
 ```
