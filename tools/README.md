@@ -28,6 +28,12 @@ python3 tools/export_actor.py extract --in data/models/latest --out /tmp/params
 /tmp/ts27/bin/python tools/export_actor.py script --in /tmp/params --out models/ts
 ```
 
+`script` 阶段还会为每个 actor 生成 `data/models/ts/actor<N>_manifest.json`：
+逐条记录 `entry` 序号 → 层名 → 形状。TorchScript 把张量数据以 **STORED（不压缩）** 形式写成
+`<root>/data/<i>`，所以 Go / C++ 只要按清单读原始 float32 字节即可，不需要 libtorch、不需要 zlib、
+也不需要额外再存一份 `.bin`（避免权重翻倍）。清单的正确性已在训练机上用 `torch.equal`
+逐层比对 `entry i` 与 `named_parameters()[i]` 验证过。
+
 `script` 阶段带 `--golden` 时会顺手回放基准记录，报告与 C++ 的偏差：
 
 ```bash

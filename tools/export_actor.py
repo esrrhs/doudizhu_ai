@@ -173,7 +173,31 @@ def replay(path: str, out_dir: str) -> None:
           f"argmax mismatches = {mismatch}")
 
 
+def write_manifest(model: "Actor", dst: str, seat: int) -> None:
+    """Record the zip entry order -> layer mapping so other languages can read the archive.
+
+    TorchScript stores tensor data as STORED (uncompressed) entries named ``<root>/data/<i>``,
+    numbered in module registration order. A reader only needs this manifest plus a raw
+    float32 copy of those entries, so Go/C++ can load the weights with no libtorch and no zlib.
+    """
+    order = [name for name, _ in model.named_parameters()]
+    if order != PARAM_NAMES:
+        raise AssertionError(f"parameter order changed: {order}")
+    manifest = {
+        "root": f"actor{seat}",
+        "dtype": "float32",
+        "byteOrder": "little",
+        "gateOrder": "LSTM gates are concatenated as i, h, f, c on the input and hidden halves",
+        "parameters": [{"entry": i, "name": name, "shape": list(t.shape)}
+                       for i, (name, t) in enumerate(model.named_parameters())],
+    }
+    with open(os.path.join(dst, f"actor{seat}_manifest.json"), "w") as handle:
+        json.dump(manifest, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+
+
 def script(src: str, dst: str, golden: str) -> None:
+    import json
     os.makedirs(dst, exist_ok=True)
     for seat in range(3):
         model = Actor()
@@ -184,7 +208,8 @@ def script(src: str, dst: str, golden: str) -> None:
         model.eval()
         scripted = torch.jit.script(model)
         torch.jit.save(scripted, os.path.join(dst, f"actor{seat}_ts.pt"))
-        print(f"  wrote actor{seat}_ts.pt")
+        write_manifest(model, dst, seat)
+        print(f"  wrote actor{seat}_ts.pt + actor{seat}_manifest.json")
     if golden:
         replay(golden, dst)
 
