@@ -3,3 +3,4 @@
 /target/
 *.log
 Result.txt
+__pycache__/
