@@ -23,10 +23,34 @@ final class GoldenReader implements AutoCloseable {
     private String[] tokens = new String[0];
     private int index;
 
+    /** 从仓库根的 data/ 目录读取 (三种语言共用同一份基准), 退化时再找 classpath */
+    static GoldenReader openFromData(String relativeToRepoRoot) {
+        java.io.InputStream file = null;
+        java.nio.file.Path found = com.doudizhu.nn.SharedData.find(relativeToRepoRoot);
+        try {
+            if (found != null) {
+                file = new java.io.FileInputStream(found.toFile());
+            } else {
+                file = GoldenReader.class.getResourceAsStream("/" + relativeToRepoRoot);
+            }
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException("读取 " + relativeToRepoRoot + " 失败", e);
+        }
+        return openStream(file, relativeToRepoRoot);
+    }
+
     static GoldenReader open(String classpathResource) {
         InputStream raw = GoldenReader.class.getResourceAsStream(classpathResource);
         if (raw == null) {
             throw new IllegalStateException("找不到 golden 资源 " + classpathResource);
+        }
+        return openStream(raw, classpathResource);
+    }
+
+    private static GoldenReader openStream(java.io.InputStream raw, String where) {
+        if (raw == null) {
+            throw new IllegalStateException("找不到 golden 记录 " + where
+                    + " (应由 PerfectDouCPP tools/pddump.cpp 生成放在仓库 data/golden/ 下)");
         }
         try {
             return new GoldenReader(new BufferedReader(

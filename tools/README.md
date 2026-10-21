@@ -1,8 +1,8 @@
 # 权重工具 (tools/)
 
 这两个脚本服务于「训练产出的权重 → Java 可推理的权重 → 可验证的移植」这条链路。
-它们**不参与运行时、不被 Maven 打包**，工程本身只依赖产出的 `models/ts` 与
-`src/test/resources/golden/golden24.txt.gz`。
+它们**不参与运行时、不被 Maven 打包**，工程本身只依赖产出的 `data/models/ts` 与
+`data/golden/golden24.txt.gz`。
 
 | 文件 | 干什么 | 在哪跑 |
 |---|---|---|
@@ -22,7 +22,7 @@
 
 ```bash
 # 阶段 1：用与训练侧一致的 torch (2.14) 从原始档里抽出参数
-python3 tools/export_actor.py extract --in models/latest --out /tmp/params
+python3 tools/export_actor.py extract --in data/models/latest --out /tmp/params
 
 # 阶段 2：用与原生库一致的 torch (2.7.1) 重建并脚本化
 /tmp/ts27/bin/python tools/export_actor.py script --in /tmp/params --out models/ts
@@ -39,10 +39,10 @@ python3 tools/export_actor.py extract --in models/latest --out /tmp/params
 导出完成后必须跑一次对齐测试确认：
 
 ```bash
-mvn test -Dtest='PerfectDouFeaturesGoldenTest,ActorNetworkGoldenTest'
+cd java && ./mvnw test -Dtest='PerfectDouFeaturesGoldenTest,ActorNetworkGoldenTest'
 ```
 
-> `models/latest` 与 `models/ts` 的对应关系：前者是训练机的原始产出，后者是本工程真正加载的文件。
+> data/models/latest` 与 `data/models/ts` 的对应关系：前者是训练机的原始产出，后者是本工程真正加载的文件。
 > 换 DJL 版本时，两处都要重做一遍（原生库版本决定阶段 2 用哪个 torch）。
 
 ---
@@ -68,7 +68,7 @@ g++ -std=c++20 -O2 -o pddump pddump.cpp \
 gzip -c golden.txt > golden24.txt.gz                            # 约 300KB
 ```
 
-把 `golden24.txt.gz` 放到 `src/test/resources/golden/` 覆盖旧文件即可（文本约 13MB，gzip 后很小，
+把 `golden24.txt.gz` 放到 `data/golden/` 覆盖旧文件即可（文本约 13MB，gzip 后很小，
 因为牌矩阵几乎全是 0/1）。
 
 ### 记录格式

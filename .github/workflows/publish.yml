@@ -3,7 +3,7 @@ name: Publish to Maven Central
 on:
   push:
     paths:
-      - 'pom.xml'
+      - 'java/pom.xml'
     branches:
       - master
   workflow_dispatch:
@@ -28,7 +28,7 @@ jobs:
     - name: Check version change
       id: check_version
       run: |
-        CUR_VER=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+        CUR_VER=$(mvn -f java/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)
         echo "Current version: $CUR_VER"
         echo "current_version=$CUR_VER" >> $GITHUB_OUTPUT
         
@@ -39,9 +39,9 @@ jobs:
           exit 0
         fi
 
-        git checkout HEAD^ pom.xml || true
-        PREV_VER=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout || echo "")
-        git checkout HEAD pom.xml || true
+        git checkout HEAD^ -- java/pom.xml || true
+        PREV_VER=$(mvn -f java/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout || echo "")
+        git checkout HEAD -- java/pom.xml || true
         echo "Previous version: $PREV_VER"
 
         if [ "$CUR_VER" != "$PREV_VER" ]; then
@@ -90,6 +90,7 @@ jobs:
 
     - name: Publish to Central Repository via Sonatype Portal
       if: steps.check_version.outputs.should_publish == 'true'
+      working-directory: java
       env:
         MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
         MAVEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN }}

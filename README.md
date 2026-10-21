@@ -58,7 +58,7 @@ implementation 'com.github.esrrhs:doudizhu_ai:1.1.0'
 ## 🌟 核心特性
 
 ### 1. 强化学习策略网络出牌
-- **权重来源**：由 [PerfectDouCPP](https://github.com/esrrhs/PerfectDouCPP) 自对弈强化学习训练，按座位（地主 / 地主下家 / 地主上家）各一个网络，仓库 `models/` 已附带；
+- **权重来源**：由 [PerfectDouCPP](https://github.com/esrrhs/PerfectDouCPP) 自对弈强化学习训练，按座位（地主 / 地主下家 / 地主上家）各一个网络，仓库 `data/models/` 已附带；
 - **决策方式**：完整枚举当前所有合法走法（含飞机、四带二的**全部具体带牌组合**），逐手打分后直接取最高分，单次推理毫秒级；
 - **只用公开信息**：观察特征为我的手牌、两家合计的未知牌、各家已出与最近一手、底牌剩余、最近 30 手历史、剩余手数等，**不读取任何玩家的私有手牌**；
 - **移植校验**：测试内与 C++ 训练侧逐位对齐——候选动作集合、全部输入特征、logits（最大偏差 2.7e-4）与 argmax（712 个决策零不一致）。
@@ -87,38 +87,38 @@ JDK 17+，Apache Maven 3.5+
 
 ### 1. 启动网页端对战平台
 ```bash
-mvn exec:java                        # http://localhost:8080
-mvn exec:java -Dexec.args="--port=8088"
-mvn exec:java -Dexec.args="--model-dir=/path/to/weights"
+cd java
+./mvnw exec:java                            # http://localhost:8080
+./mvnw exec:java -Dexec.args="--port=8088"
+./mvnw exec:java -Dexec.args="--model-dir=/path/to/weights"
 ```
 
 ### 2. 命令行 AI 演示（三个 AI 自动打一局）
 ```bash
-mvn exec:java -Dexec.args="--cli"
+cd java && ./mvnw exec:java -Dexec.args="--cli"
 ```
 
 ### 3. 运行测试
 ```bash
-mvn clean test
+cd java && ./mvnw clean test
 ```
-其中 `PerfectDouFeaturesGoldenTest` / `ActorNetworkGoldenTest` 会读取 `src/test/resources/golden/`
-里由 C++ 导出的基准记录做逐位对齐校验，需要原生库可用。
+其中 `PerfectDouFeaturesGoldenTest` / `ActorNetworkGoldenTest` 会读取 `data/golden/` 里由 C++ 导出的
+基准记录做逐位对齐校验，需要原生库可用。
 
 ### 4. 权重的来源与再导出
-`models/latest` 是训练机直接产出的权重，`models/ts` 是 Java 侧可推理的 TorchScript 权重。
+`data/models/latest` 是训练机直接产出的权重，`data/models/ts` 是 Java 侧可推理的 TorchScript 权重。
 训练侧用 libtorch `OutputArchive` 保存，**只有参数、没有 forward**，任何 TorchScript 运行时都无法直接调用，
 因此需要一次重建导出：
 
 ```bash
 # 1) 用训练侧的 PyTorch 版本抽出参数
-python3 tools/export_actor.py extract --in models/latest --out /tmp/params
+python3 tools/export_actor.py extract --in data/models/latest --out /tmp/params
 # 2) 用与原生库一致的版本 (2.7.1) 重建并脚本化
-python3 tools/export_actor.py script --in /tmp/params --out models/ts
+python3 tools/export_actor.py script --in /tmp/params --out data/models/ts
 ```
 
 两个脚本都在本仓库 [tools/](tools/README.md)：`export_actor.py` 负责重建导出，
-`pddump.cpp` 负责生成 `src/test/resources/golden/` 里的逐决策基准记录（只有训练侧特征或网络结构
-变了才需要重新生成）。步骤、编译命令、记录格式与踩坑记录见 [tools/README.md](tools/README.md)。
+`pddump.cpp` 负责生成 `data/golden/` 里的逐决策基准记录（只有训练侧特征或网络结构变了才需要重新生成）。步骤、编译命令、记录格式与踩坑记录见 [tools/README.md](tools/README.md)。
 
 ---
 
@@ -126,27 +126,26 @@ python3 tools/export_actor.py script --in /tmp/params --out models/ts
 
 ```text
 doudizhu_ai/
-├── pom.xml                                   # Maven 配置 (Java 17, Central 发布, GPG 签名)
-├── models/
-│   ├── latest/                               # 训练机导出的原始权重 (仅参数, 无 forward)
-│   └── ts/                                   # 可推理的 TorchScript 权重 (DJL 加载)
-├── tools/                                    # 权重导出与基准记录生成脚本 (不参与运行时)
-├── src/
-│   ├── main/
-│   │   ├── java/com/doudizhu/
-│   │   │   ├── model/                        # 领域模型 (Rank, Role, CardType, Move, Hand)
-│   │   │   ├── rules/                        # 规则与牌库 (Deck, MoveGenerator)
-│   │   │   ├── game/                         # 牌局状态机与信息视角 (GameState, Player, PublicView)
-│   │   │   ├── ai/                           # AiPlayer / AiDecision / NeuralAiPlayer / BidRule
-│   │   │   ├── nn/                           # 特征编码、完整动作枚举、手数 oracle、DJL 推理封装
-│   │   │   ├── web/                          # Web 会话与 HTTP 服务 (GameSession, GameHttpServer)
-│   │   │   └── Main.java                     # 启动入口
-│   │   └── resources/
-│   │       ├── logback.xml
-│   │       └── static/                       # 前端 (index.html, style.css, app.js)
-│   └── test/
-│       ├── java/com/doudizhu/nn/             # 与 C++ 训练侧的逐位对齐测试
-│       └── resources/golden/                 # 基准决策记录 (24 局 712 决策)
+├── java/                          # Java 实现（当前参照实现，Maven 坐标 com.github.esrrhs:doudizhu_ai）
+│   ├── pom.xml  mvnw  .mvn/       # Java 17, Central 发布, GPG 签名
+│   └── src/main/java/com/doudizhu/
+│       ├── model/                 # 领域模型 (Rank, Role, CardType, Move, Hand)
+│       ├── rules/                 # 规则与牌库 (Deck, MoveGenerator)
+│       ├── game/                  # 牌局状态机与信息视角 (GameState, Player, PublicView)
+│       ├── ai/                    # AiPlayer / AiDecision / NeuralAiPlayer / BidRule
+│       ├── nn/                    # 特征编码、完整动作枚举、手数 oracle、DJL 推理封装
+│       ├── web/                   # Web 会话与 HTTP 服务 (GameSession, GameHttpServer)
+│       └── Main.java              # 启动入口
+│       src/main/resources/static/ # 前端 (index.html, style.css, app.js)
+│       src/test/java/…/nn/        # 与训练侧的逐位对齐测试
+├── go/                            # Go 实现（纯 Go 前向，规划中）
+├── cpp/                           # C++ 实现（libtorch 精简推理库，规划中）
+├── server/                        # fakelua 服务（Lua 牌局流程 + 原生推理，规划中）
+├── data/
+│   ├── models/latest/             # 训练机导出的原始权重（仅参数，无 forward）
+│   ├── models/ts/                 # 可推理的 TorchScript 权重（各语言共用）
+│   └── golden/                    # 训练侧导出的逐决策基准记录（各语言共用）
+└── tools/                         # 权重导出与基准记录生成脚本（不参与运行时）
 ```
 
 ---

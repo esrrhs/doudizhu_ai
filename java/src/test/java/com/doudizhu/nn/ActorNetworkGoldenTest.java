@@ -22,15 +22,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ActorNetworkGoldenTest {
 
-    private static final String GOLDEN = "/golden/golden24.txt.gz";
-    private static final Path MODEL_DIR = Path.of("models/ts");
+    private static final String GOLDEN = "data/golden/golden24.txt.gz";
+    private static final Path MODEL_DIR = SharedData.resolve("data/models/ts");
 
     @Test
     @DisplayName("原生推理对齐：DJL 打出的 logits 与 C++ 一致且 argmax 完全相同")
     void logitsMatchCppReference() throws Exception {
-        assertThat(Path.of("src/test/resources" + GOLDEN)).as("golden 文件").exists();
         try (ActorNetwork network = ActorNetwork.load(MODEL_DIR)) {
-            GoldenReader reader = GoldenReader.open(GOLDEN);
+            GoldenReader reader = GoldenReader.openFromData(GOLDEN);
             int decisions = 0;
             int argmaxMismatch = 0;
             double worst = 0;

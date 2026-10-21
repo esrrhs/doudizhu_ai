@@ -1,6 +1,14 @@
-/build/
-/bin/
-/target/
+# 构建产物 (任意层级的 target)
+target/
+go/bin/
+go/*.test
+cpp/build/
+cpp/bin/
+server/build/
+server/bin/
+
+# 其他
 *.log
 Result.txt
 __pycache__/
+.DS_Store

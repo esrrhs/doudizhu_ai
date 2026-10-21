@@ -25,12 +25,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class PerfectDouFeaturesGoldenTest {
 
-    private static final String GOLDEN = "/golden/golden24.txt.gz";
+    private static final String GOLDEN = "data/golden/golden24.txt.gz";
 
     @Test
     @DisplayName("golden 对齐：候选动作、xImp、seq、actionFeat 与 C++ 完全一致")
     void javaFeaturesMatchCppGolden() {
-        GoldenReader reader = GoldenReader.open(GOLDEN);
+        GoldenReader reader = GoldenReader.openFromData(GOLDEN);
         Diff diff = new Diff();
         int decisions = 0;
         try {

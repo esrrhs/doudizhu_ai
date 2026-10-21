@@ -1,4 +1,6 @@
+@echo off
+cd java
 pause
-start https://oss.sonatype.org/#stagingRepositories
-mvn clean deploy -P sonatype-oss-release 
+start https://central.sonatype.com/publishing
+mvnw.cmd clean deploy -Prelease
 pause
