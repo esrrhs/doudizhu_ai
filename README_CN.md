@@ -143,6 +143,8 @@ auto d = policy.Decide(state.GetPublicView(active));
 
 ## 🌐 网页对战平台 (FakeLua)
 
+线上：<https://doudizhu.esrrhs.xyz>（部署与发布步骤见 [server/README.md](server/README.md)）。
+
 1 真人（0 号位）对 2 个策略网络 AI：随机叫分、底牌翻开、AI 提示、AI 思路面板、
 记牌器与战报日志、多 Session 隔离。
 

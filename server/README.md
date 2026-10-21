@@ -87,6 +87,39 @@ fakelua 没有 GC，但帧 arena 在每次顶层 Call 入口重置，请求级�
 会**长期驻留**的只有两处：`container.map` 里序列化后的会话表，以及宿主 registry 里的牌局对象 ——
 后者必须显式 `doudizhu.free`，所以重开一局会先释放上一局，闲置一小时以上的会话由 `Sweep` 回收。
 
+## 线上部署
+
+<https://doudizhu.esrrhs.xyz> —— nginx 反代到 `127.0.0.1:8889`，进程由 systemd 管
+（`doudizhu.service`，`User=ubuntu`、`WorkingDirectory=<repo>/server`、`Environment=DOUDIZHU_PORT=8889`、
+`Restart=always`），与 `majiang.service` / `fakefish.service` 同一套模式。
+代码在 `ubuntu@gq.esrrhs.xyz:/home/ubuntu/project/doudizhu_ai`。
+
+**那台机器访问不到 GitHub**，所以发布走 rsync 而不是 `git pull`：
+
+```bash
+# 本地执行: 同步代码 (不含 .git 与各类构建目录)
+cd .. && rsync -az --delete --exclude='.git/' --exclude='**/target/' \
+    --exclude='server/host/build/' --exclude='cpp/build/' --exclude='go/bin/' \
+    doudizhu_ai/ ubuntu@gq.esrrhs.xyz:/home/ubuntu/project/doudizhu_ai/
+
+# 远端执行: 重新编译 + 自检 + 重启
+ssh ubuntu@gq.esrrhs.xyz 'cd /home/ubuntu/project/doudizhu_ai/server && \
+    cmake -S host -B host/build -DCMAKE_BUILD_TYPE=Release -DFAKELUA_PREFIX=/usr/local && \
+    cmake --build host/build -j2 && \
+    DOUDIZHU_SMOKE=1 ./host/build/doudizhu_server lua --once && \
+    sudo systemctl restart doudizhu'
+
+# 打线上跑一遍接口契约 (12 个用例)
+python3 server/tests/api_test.py --base-url https://doudizhu.esrrhs.xyz
+```
+
+宿主机上已装 `/usr/local` 版 fakelua（`flua` + `libfakelua` + `fakeluaConfig.cmake`，
+`majiang`/`fakefish` 用的就是它），所以只需要编本仓库的宿主，不用重编 boost；
+换机器时要先装 fakelua，见上面的「构建」。
+
+gq 是 2 核 2G 的共享机器，实测这个服务 RSS 约 34 MB、空闲 CPU 0.4%，重启到重新监听约 5 s
+（4 个 Lua 文件的 JIT 编译）。它与 majiang(:8888)、fakefish(:8080) 并存，端口别撞。
+
 ## 已知边界
 
 - 单线程事件循环，一次请求要跨三拍（收 → 派发 → 回包），尾延迟由节拍决定而不是算法决定。
