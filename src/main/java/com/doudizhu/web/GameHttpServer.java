@@ -1,10 +1,10 @@
 package com.doudizhu.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.doudizhu.ai.BidEvaluator;
-import com.doudizhu.ai.PimcAiPlayer;
+import com.doudizhu.ai.AiDecision;
+import com.doudizhu.ai.AiPlayer;
+import com.doudizhu.ai.MoveScore;
 import com.doudizhu.game.GameState;
-import com.doudizhu.nn.ActorNetwork;
 import com.doudizhu.model.Move;
 import com.doudizhu.model.Rank;
 import com.sun.net.httpserver.HttpExchange;
@@ -56,15 +56,11 @@ public class GameHttpServer {
         return t;
     });
 
-    private final ActorNetwork neural;
+    private final AiPlayer aiPlayer;
 
-    public GameHttpServer(int port) {
-        this(port, null);
-    }
-
-    /** @param neural 非空时 AI 座位使用强化学习策略网络 */
-    public GameHttpServer(int port, ActorNetwork neural) {
-        this.neural = neural;
+    /** @param aiPlayer 驱动网页端两个 AI 座位的决策器 */
+    public GameHttpServer(int port, AiPlayer aiPlayer) {
+        this.aiPlayer = aiPlayer;
         this.port = port;
         this.sessionCleaner.scheduleAtFixedRate(this::cleanExpiredSessions, 10, 10, TimeUnit.MINUTES);
     }
@@ -126,7 +122,7 @@ public class GameHttpServer {
 
     private GameSession getSession(HttpExchange exchange) {
         String sessionId = getOrInitSessionId(exchange);
-        SessionContainer container = sessions.computeIfAbsent(sessionId, id -> new SessionContainer(new GameSession(neural)));
+        SessionContainer container = sessions.computeIfAbsent(sessionId, id -> new SessionContainer(new GameSession(aiPlayer)));
         container.touch();
         return container.session;
     }
@@ -416,44 +412,23 @@ public class GameHttpServer {
         }
         dto.put("playerActions", playerActions);
 
-        // AI 思考推演信息
+        // AI 出牌思路：候选动作与策略概率 (softmax 归一化, 不是搜索胜率)
         Map<String, Object> aiThoughtsDto = new HashMap<>();
-
-        // 叫牌思考雷达
-        if (session.getStage() == GameSession.Stage.BIDDING) {
-            for (Map.Entry<Integer, BidEvaluator.BidResult> e : session.getLastBidThoughts().entrySet()) {
-                BidEvaluator.BidResult res = e.getValue();
-                Map<String, Object> bidMap = new HashMap<>();
-                bidMap.put("type", "bid");
-                bidMap.put("shouldCall", res.shouldCall());
-                bidMap.put("winRate", Math.round(res.winRate() * 1000.0) / 10.0);
-                bidMap.put("timeMs", res.durationMs());
-                bidMap.put("sims", res.totalSimulations());
-                bidMap.put("controlScore", res.controlScore());
-                bidMap.put("summary", res.analysisSummary() != null ? res.analysisSummary() : "");
-                aiThoughtsDto.put("p" + e.getKey(), bidMap);
-            }
-        } else {
-            // 出牌思考雷达
-            for (Map.Entry<Integer, PimcAiPlayer.DecisionResult> e : session.getLastAiThoughts().entrySet()) {
-                PimcAiPlayer.DecisionResult res = e.getValue();
-                List<Map<String, Object>> evals = new ArrayList<>();
-                int limit = Math.min(4, res.getEvaluations().size());
-                for (int i = 0; i < limit; i++) {
-                    PimcAiPlayer.MoveEvaluation me = res.getEvaluations().get(i);
-                    evals.add(Map.of(
-                            "cards", me.getMove().toCardString(),
-                            "visits", me.getTotalVisits(),
-                            "winRate", Math.round(me.getAverageWinRate() * 1000.0) / 10.0
-                    ));
-                }
-                aiThoughtsDto.put("p" + e.getKey(), Map.of(
-                        "type", "play",
-                        "move", res.getSelectedMove().toCardString(),
-                        "timeMs", res.getDurationMillis(),
-                        "evals", evals
+        for (Map.Entry<Integer, AiDecision> e : session.getLastAiThoughts().entrySet()) {
+            AiDecision res = e.getValue();
+            List<Map<String, Object>> evals = new ArrayList<>();
+            for (MoveScore ms : res.getScores().subList(0, Math.min(4, res.getScores().size()))) {
+                evals.add(Map.of(
+                        "cards", ms.move().toCardString(),
+                        "probability", Math.round(ms.probability() * 1000.0) / 10.0
                 ));
             }
+            aiThoughtsDto.put("p" + e.getKey(), Map.of(
+                    "type", "play",
+                    "move", res.getSelectedMove().toCardString(),
+                    "timeMs", res.getDurationMillis(),
+                    "evals", evals
+            ));
         }
         dto.put("aiThoughts", aiThoughtsDto);
 
