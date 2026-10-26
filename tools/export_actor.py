@@ -19,6 +19,7 @@ logit deviation between the C++ reference and the scripted module.
 """
 
 import argparse
+import json
 import os
 import sys
 
@@ -189,7 +190,7 @@ def write_manifest(model: "Actor", dst: str, seat: int) -> None:
     if order != PARAM_NAMES:
         raise AssertionError(f"parameter order changed: {order}")
     manifest = {
-        "root": f"actor{seat}",
+        "root": f"actor{seat}_ts",
         "dtype": "float32",
         "byteOrder": "little",
         "gateOrder": LSTM_GATE_ORDER,
