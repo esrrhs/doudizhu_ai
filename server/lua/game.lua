@@ -409,19 +409,31 @@ function Hint(sid)
     if e.over == true or e.active ~= HUMAN then
         return { hint = nil }
     end
-    local moves = DoudizhuDef.ParseMoves(doudizhu.legal(s.gameId))
-    if #moves == 0 then
-        return { hint = nil }
+    local chosen = nil
+    -- 优先走策略网络：真人要提示时用模型评估出最优着法
+    local decided = DoudizhuDef.ParseDecision(doudizhu.decide(s.gameId))
+    if decided ~= nil and decided.chosen ~= nil then
+        chosen = decided.chosen
+    else
+        local moves = DoudizhuDef.ParseMoves(doudizhu.legal(s.gameId))
+        if #moves == 0 then
+            return { hint = nil }
+        end
+        chosen = pick_hint(moves, table_cleared(e))
     end
-    local chosen = pick_hint(moves, table_cleared(e))
     if chosen == nil then
         return { hint = nil }
     end
-    return {
+    local res = {
         hint = DoudizhuDef.CardsToSymbols(chosen.cards),
         isPass = chosen.type == 0,
         type = DoudizhuDef.TypeName(chosen.type)
     }
+    if decided ~= nil and decided.evals ~= nil and #decided.evals > 0 then
+        res.evals = decided.evals
+        res.probability = decided.evals[1].probability
+    end
+    return res
 end
 
 -- 前端要的完整状态 DTO, 字段与 Java 版 GameHttpServer.buildStateDto 一一对应
