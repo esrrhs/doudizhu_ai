@@ -231,7 +231,15 @@ document.addEventListener("DOMContentLoaded", () => {
             selectedCards = [...data.hint];
             renderHand(currentState.humanHand);
             btnPlay.disabled = false;
-            showToast(`💡 AI 走法推荐: <strong>${data.hint.join(", ")}</strong>`, "info");
+            let msg = `💡 AI 走法推荐: <strong>${data.hint.join(", ")}</strong>`;
+            if (data.type) {
+                msg += ` (${data.type}`;
+                if (data.probability !== undefined) {
+                    msg += ` ${data.probability}%`;
+                }
+                msg += `)`;
+            }
+            showToast(msg, "info");
         } catch (err) {
             console.error("Hint error:", err);
             showToast("⚠️ 获取提示失败", "warning");
