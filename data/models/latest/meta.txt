@@ -1,4 +1,4 @@
-update 105300
+update 100000
 seed 1
 lr 0.0003
 ent 0.03
