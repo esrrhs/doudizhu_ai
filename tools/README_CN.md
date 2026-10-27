@@ -60,8 +60,8 @@ cd java && ./mvnw test -Dtest='PerfectDouFeaturesGoldenTest,ActorNetworkGoldenTe
 
 ## 二、重新生成对齐基准 (pddump)
 
-Java 侧那两个测试吃的是 C++ 导出的「真相记录」。**只有当训练侧的特征编码或网络结构变了
-（`src/ddz/features.cpp`、`src/ddz/oracle.cpp`、`src/torch_nn/models.h`）才需要重新生成。**
+Java 侧那两个测试吃的是 C++ 导出的「真相记录」。**当模型权重更新时（因为基准记录包含模型输出的 logits 与选牌 CHOSEN）、
+或训练侧的特征编码 / 网络结构发生变化时（`src/ddz/features.cpp`、`src/ddz/oracle.cpp`、`src/torch_nn/models.h`），都必须重新生成。**
 
 在训练机上编译并运行（只链接 PerfectDouCPP 现成的静态库，不改动那个工程）：
 

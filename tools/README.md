@@ -67,7 +67,8 @@ cd java && ./mvnw test -Dtest='PerfectDouFeaturesGoldenTest,ActorNetworkGoldenTe
 
 ## 2. Regenerating the alignment baseline (pddump)
 
-The two Java tests consume the "ground-truth records" exported by C++. **They only need regenerating
+The two Java tests consume the "ground-truth records" exported by C++. **They need regenerating
+whenever the model weights change (as the baseline records the model's logits and chosen moves), or
 when the training-side feature encoding or the network structure changes
 (`src/ddz/features.cpp`, `src/ddz/oracle.cpp`, `src/torch_nn/models.h`).**
 
