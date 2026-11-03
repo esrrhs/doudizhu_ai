@@ -105,6 +105,10 @@ struct Session
     std::array<doudizhu::CardSet, 3> dealt{};
     doudizhu::CardSet bottom;
     int firstBidder = 0;
+    // 叫分座位单独维护: 绝不能拿 GameState::ApplyMove(Pass) 来轮转 ——
+    // 出牌规则里连续两家过牌会把 active 拨回 lastMovePlayer (开局是 -1),
+    // 第三人再叫地主就会 MakeLandlord(-1) 越界把进程打崩。
+    int currentBidder = 0;
     int bids = 0;
     bool bidding = true;
     bool hasLandlord = false;
@@ -250,7 +254,7 @@ std::string StateJson(const Session &s, int viewer)
       << ",\"winner\":" << s.state.WinnerId()
       << ",\"winnerIsLandlord\":" << (s.state.IsLandlord(s.state.WinnerId()) ? "true" : "false")
       << ",\"winnerSeat0\":" << (s.state.IsPlayerWinner(0) ? "true" : "false")
-      << ",\"active\":" << s.state.ActivePlayerIndex()
+      << ",\"active\":" << (s.bidding ? s.currentBidder : s.state.ActivePlayerIndex())
       << ",\"landlord\":" << (s.hasLandlord ? s.landlordId : -1)
       << ",\"bidding\":" << (s.bidding ? "true" : "false")
       << ",\"firstBidder\":" << s.firstBidder
@@ -305,11 +309,15 @@ int64_t NativeNewGame(int64_t seed, int64_t firstBidder)
     std::mt19937_64 rng(seed > 0 ? static_cast<uint64_t>(seed) : std::random_device{}());
     ShuffleDeal(sess->dealt, sess->bottom, rng);
     sess->firstBidder = static_cast<int>(firstBidder >= 0 && firstBidder <= 2 ? firstBidder : 0);
+    sess->currentBidder = sess->firstBidder;
+    // 叫分阶段还没有地主; GameState 里的 landlordId 只是占位, 轮转看 currentBidder。
     sess->state = doudizhu::GameState(sess->dealt, sess->firstBidder, sess->bottom);
     return g_registry.Insert(std::move(sess));
 }
 
-// 叫分: 叫 -> 定地主; 不叫 -> 轮转; 三家都不叫 -> 由 Lua 拿 draw 后调 redeal 重发
+// 叫分: 叫 -> 定地主; 不叫 -> 轮转; 三家都不叫 -> 由 Lua 拿 draw 后调 redeal 重发。
+// 轮转只动 currentBidder, 绝不 ApplyMove(Pass): 出牌状态机的「两家过牌回到上家」
+// 在叫分阶段会把 active 置成 -1, 下一口叫地主直接越界崩溃。
 std::string NativeBid(int64_t id, int64_t call)
 {
     return Guard(NoSession(), [id, call] {
@@ -320,7 +328,10 @@ std::string NativeBid(int64_t id, int64_t call)
         if (!sess->bidding) {
             return std::string("{\"error\":\"not bidding\"}");
         }
-        const int bidder = sess->state.ActivePlayerIndex();
+        const int bidder = sess->currentBidder;
+        if (bidder < 0 || bidder > 2) {
+            return std::string("{\"error\":\"bad bidder\"}");
+        }
         sess->bids += 1;
         if (call != 0) {
             MakeLandlord(*sess, bidder);
@@ -330,7 +341,7 @@ std::string NativeBid(int64_t id, int64_t call)
             const int next = (sess->firstBidder + 1) % 3;
             return "{\"outcome\":\"draw\",\"next\":" + std::to_string(next) + "}";
         }
-        sess->state.ApplyMove(doudizhu::MakePass(bidder));
+        sess->currentBidder = (bidder + 1) % 3;
         return "{\"outcome\":\"pass\",\"bidder\":" + std::to_string(bidder) + "}";
     });
 }
@@ -345,6 +356,7 @@ std::string NativeRedeal(int64_t id, int64_t firstBidder)
         std::mt19937_64 rng(std::random_device{}());
         ShuffleDeal(sess->dealt, sess->bottom, rng);
         sess->firstBidder = static_cast<int>(firstBidder >= 0 && firstBidder <= 2 ? firstBidder : 0);
+        sess->currentBidder = sess->firstBidder;
         sess->bids = 0;
         sess->bidding = true;
         sess->hasLandlord = false;

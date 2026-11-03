@@ -119,8 +119,9 @@ Lua 侧只拿到整数会话 id，牌局对象始终留在 C++ 里。
 
 三条不变量：
 
-1. **叫分状态机在引擎里**。`GameState` 在叫分阶段用 `firstBidder` 当占位地主来获得轮转顺序，
-   定下地主后用「三家手牌 + 底牌并给地主」重建，所以叫分阶段的过牌不会污染正式对局的历史。
+1. **叫分状态机在宿主 Session 里**。`currentBidder` / `bids` 独立轮转，绝不借用
+   `GameState::ApplyMove(Pass)`（出牌规则里连续两家过牌会把 active 拨回 `-1`）。
+   定下地主后才用「三家手牌 + 底牌并给地主」重建 `GameState`，叫分不会污染出牌历史。
 2. **`doudizhu.state` 严格按 viewer 过滤**：只有 viewer 自己的手牌是明文，其余家只给张数，
    终局时才在 `revealed` 里公开三家剩余手牌。
 3. **会话必须显式释放**。fakelua 没有 GC，宿主也不会自动回收：`lua/game.lua` 在会话重开时
